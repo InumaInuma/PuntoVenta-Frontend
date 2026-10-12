@@ -11,6 +11,7 @@ export interface TenantConfig {
   telefonoWhatsApp: string;
   correoContacto: string;
   direccion: string;
+  logoUrl?: string;
   textoCabeceraTicket?: string;
   textoPieTicket?: string;
   anchoTicketMm: number;

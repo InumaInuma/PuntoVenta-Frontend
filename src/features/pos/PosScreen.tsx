@@ -17,7 +17,6 @@ import {
   Barcode,
   AlertCircle,
   ArrowRight,
-  Search,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 
@@ -44,6 +43,8 @@ export const PosScreen: React.FC = () => {
     vuelto: number;
     metodoPago: string;
     cliente?: string;
+    clienteDocumento?: string;
+    tipoComprobante?: string;
   } | null>(null);
 
   const [lastScannedFeedback, setLastScannedFeedback] = useState<string | null>(null);

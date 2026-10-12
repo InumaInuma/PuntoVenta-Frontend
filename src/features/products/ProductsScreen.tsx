@@ -1,122 +1,255 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect } from 'react';
 import { productosService } from '@/services/backend/productosService';
 import { categoriasService } from '@/services/backend/categoriasService';
 import type { Producto, Categoria } from '@/types';
-import { Button } from '@/components/ui/Button';
-import { Modal } from '@/components/ui/Modal';
-import { Plus, Search, Package, Sparkles, Scale } from 'lucide-react';
+import { Search, Sparkles, Printer } from 'lucide-react';
 import { CategoryCarousel } from '@/features/pos/CategoryCarousel';
+import { CategoryManagerModal } from './CategoryManagerModal';
+import { BarcodeScannerModal } from '@/features/pos/BarcodeScannerModal';
+import { BarcodePrintModal, type BarcodePrintData } from './BarcodePrintModal';
+import { ConfirmModal } from '@/components/ui/ConfirmModal';
+import { SuccessModal } from '@/components/ui/SuccessModal';
+import {
+  ProductsHeader,
+  ProductCard,
+  ProductPagination,
+  ProductFormModal,
+  type ProductFormData,
+} from './components';
 import { useCart } from '@/context/CartContext';
 import toast from 'react-hot-toast';
 
 export const ProductsScreen: React.FC = () => {
   const { addItem, items } = useCart();
+
+  // Estados del Catálogo y Categorías
   const [productos, setProductos] = useState<Producto[]>([]);
   const [categorias, setCategorias] = useState<Categoria[]>([]);
   const [selectedCategoria, setSelectedCategoria] = useState<number | null>(null);
   const [search, setSearch] = useState('');
   const [isLoading, setIsLoading] = useState(true);
 
-  // Modal Nuevo / Editar Producto
-  const [isModalOpen, setIsModalOpen] = useState(false);
-  const [nombre, setNombre] = useState('');
-  const [codigoBarras, setCodigoBarras] = useState('');
-  const [idCategoria, setIdCategoria] = useState<number>(1);
-  const [precioVenta, setPrecioVenta] = useState('');
-  const [precioCosto, setPrecioCosto] = useState('');
-  const [stockActual, setStockActual] = useState('');
-  const [unidadMedida, setUnidadMedida] = useState('UNIDAD');
-  const [permiteDecimales, setPermiteDecimales] = useState(false);
-  const [isSubmitting, setIsSubmitting] = useState(false);
+  // Estados de Paginación del Servidor
+  const [pagina, setPagina] = useState(1);
+  const [tamanoPagina] = useState(10);
+  const [totalRegistros, setTotalRegistros] = useState(0);
+  const [totalPaginas, setTotalPaginas] = useState(1);
 
-  const loadData = async () => {
+  // Modales
+  const [isCategoryModalOpen, setIsCategoryModalOpen] = useState(false);
+  const [isFormModalOpen, setIsFormModalOpen] = useState(false);
+  const [editingProduct, setEditingProduct] = useState<Producto | null>(null);
+  const [isBarcodeScannerOpen, setIsBarcodeScannerOpen] = useState(false);
+  const [scannedBarcode, setScannedBarcode] = useState<string | null>(null);
+
+  // Modal Impresión Código de Barras
+  const [isPrintModalOpen, setIsPrintModalOpen] = useState(false);
+  const [printBarcodeData, setPrintBarcodeData] = useState<BarcodePrintData | null>(null);
+
+  // Modales Confirmación y Éxito de Guardado
+  const [isConfirmModalOpen, setIsConfirmModalOpen] = useState(false);
+  const [isSuccessModalOpen, setIsSuccessModalOpen] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [pendingFormData, setPendingFormData] = useState<ProductFormData | null>(null);
+  const [savedProductSummary, setSavedProductSummary] = useState<{
+    nombre: string;
+    codigoBarras: string;
+    categoria: string;
+    precioVenta: string;
+    stock: string;
+    isEditing: boolean;
+  } | null>(null);
+
+  // Modal Eliminación
+  const [productToDelete, setProductToDelete] = useState<Producto | null>(null);
+
+  // Cargar categorías y datos paginados desde el backend
+  const refreshCategorias = async () => {
+    try {
+      const cats = await categoriasService.getAll();
+      setCategorias(cats || []);
+      return cats || [];
+    } catch (err) {
+      console.error('Error al recargar categorías:', err);
+      return [];
+    }
+  };
+
+  const loadData = async (
+    pag: number = pagina,
+    catId: number | null = selectedCategoria,
+    query: string = search,
+    forceRefreshCategories: boolean = false
+  ) => {
     setIsLoading(true);
     try {
-      const [prods, cats] = await Promise.all([
-        productosService.getAll(),
-        categoriasService.getAll(),
+      const [paged, cats] = await Promise.all([
+        productosService.getPaged(
+          catId !== null ? catId : undefined,
+          query.trim() ? query.trim() : undefined,
+          pag,
+          tamanoPagina
+        ),
+        forceRefreshCategories || categorias.length === 0
+          ? categoriasService.getAll()
+          : Promise.resolve(categorias),
       ]);
-      setProductos(prods || []);
-      setCategorias(cats || []);
-      if (cats?.[0]) setIdCategoria(cats[0].idCategoria);
+
+      setProductos(paged.items || []);
+      setTotalRegistros(paged.totalRegistros || 0);
+      setTotalPaginas(paged.totalPaginas || 1);
+      setPagina(paged.numeroPagina || pag);
+
+      if (cats && cats.length > 0) {
+        setCategorias(cats);
+      }
     } catch (err) {
-      console.error(err);
+      console.error('Error cargando catálogo:', err);
+      toast.error('No se pudo cargar el catálogo de productos');
     } finally {
       setIsLoading(false);
     }
   };
 
   useEffect(() => {
-    loadData();
+    loadData(1, null, '');
   }, []);
 
-  const handleSaveProduct = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!nombre.trim() || !precioVenta) {
-      toast.error('Completa los campos obligatorios');
-      return;
-    }
+  // Búsqueda en servidor con debounce
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setPagina(1);
+      loadData(1, selectedCategoria, search);
+    }, 350);
+    return () => clearTimeout(timer);
+  }, [search]);
 
+  // Selección de categoría
+  const handleSelectCategoria = (catId: number | null) => {
+    setSelectedCategoria(catId);
+    setPagina(1);
+    loadData(1, catId, search);
+  };
+
+  // Abrir formulario para crear o editar
+  const handleOpenCreate = () => {
+    setEditingProduct(null);
+    setIsFormModalOpen(true);
+  };
+
+  const handleOpenEdit = (prod: Producto) => {
+    setEditingProduct(prod);
+    setIsFormModalOpen(true);
+  };
+
+  // Manejador del submit del formulario (dispara modal de confirmación)
+  const handleFormSubmit = (data: ProductFormData) => {
+    setPendingFormData(data);
+    setIsConfirmModalOpen(true);
+  };
+
+  // Confirmar y persistir creación / actualización en la base de datos
+  const executeSaveProduct = async () => {
+    if (!pendingFormData) return;
     setIsSubmitting(true);
-    try {
-      await productosService.create({
-        idEmpresa: 1,
-        idCategoria,
-        codigoBarras: codigoBarras.trim() || undefined,
-        nombre: nombre.trim(),
-        unidadMedida,
-        precioVenta: parseFloat(precioVenta),
-        precioCosto: precioCosto ? parseFloat(precioCosto) : undefined,
-        stockActual: stockActual ? parseFloat(stockActual) : 0,
-        permiteDecimales,
-      });
 
-      toast.success('Producto guardado correctamente');
-      setIsModalOpen(false);
-      // Limpiar formulario
-      setNombre('');
-      setCodigoBarras('');
-      setPrecioVenta('');
-      setStockActual('');
+    try {
+      const catNombre =
+        categorias.find((c) => c.idCategoria === pendingFormData.idCategoria)?.nombre || 'General';
+      const summary = {
+        nombre: pendingFormData.nombre,
+        codigoBarras: pendingFormData.codigoBarras || '(Autogenerado)',
+        categoria: catNombre,
+        precioVenta: `S/ ${pendingFormData.precioVenta.toFixed(2)}`,
+        stock: `${pendingFormData.stockActual || '0'} ${pendingFormData.unidadMedida}`,
+        isEditing: Boolean(pendingFormData.idProducto),
+      };
+
+      if (pendingFormData.idProducto) {
+        await productosService.update(pendingFormData.idProducto, {
+          idCategoria: pendingFormData.idCategoria,
+          codigoBarras: pendingFormData.codigoBarras || undefined,
+          nombre: pendingFormData.nombre,
+          unidadMedida: pendingFormData.unidadMedida,
+          precioVenta: pendingFormData.precioVenta,
+          precioCosto: pendingFormData.precioCosto,
+          stockActual: pendingFormData.stockActual,
+          permiteDecimales: pendingFormData.permiteDecimales,
+          activo: true,
+        });
+      } else {
+        await productosService.create({
+          idCategoria: pendingFormData.idCategoria,
+          codigoBarras: pendingFormData.codigoBarras || undefined,
+          nombre: pendingFormData.nombre,
+          unidadMedida: pendingFormData.unidadMedida,
+          precioVenta: pendingFormData.precioVenta,
+          precioCosto: pendingFormData.precioCosto,
+          stockActual: pendingFormData.stockActual,
+          permiteDecimales: pendingFormData.permiteDecimales,
+        });
+      }
+
+      setIsConfirmModalOpen(false);
+      setIsFormModalOpen(false);
+      setSavedProductSummary(summary);
+      setIsSuccessModalOpen(true);
       loadData();
-    } catch {
-      // Interceptor handles error
+    } catch (err: unknown) {
+      const errorObj = err as { response?: { data?: { mensaje?: string } }; message?: string };
+      const msg = errorObj?.response?.data?.mensaje || errorObj?.message || 'Error al guardar producto';
+      toast.error(msg);
+      setIsConfirmModalOpen(false);
     } finally {
       setIsSubmitting(false);
     }
   };
 
-  const filtered = useMemo(() => {
-    return productos.filter((p) => {
-      const matchCat = selectedCategoria === null || p.idCategoria === selectedCategoria;
-      const matchSearch =
-        p.nombre.toLowerCase().includes(search.toLowerCase()) ||
-        p.codigoBarras?.toLowerCase().includes(search.toLowerCase());
-      return matchCat && matchSearch;
-    });
-  }, [productos, search, selectedCategoria]);
+  // Eliminación de producto
+  const executeDeleteProduct = async () => {
+    if (!productToDelete) return;
+    try {
+      await productosService.delete(productToDelete.idProducto);
+      toast.success(`Producto "${productToDelete.nombre}" eliminado`);
+      setProductToDelete(null);
+      setIsFormModalOpen(false);
+      loadData();
+    } catch {
+      toast.error('No se pudo eliminar el producto');
+    }
+  };
+
+  // Imprimir código de barras con ticketera
+  const handleOpenPrintBarcode = (prod: Producto) => {
+    if (prod.codigoBarras) {
+      setPrintBarcodeData({
+        nombre: prod.nombre,
+        codigoBarras: prod.codigoBarras,
+        precioVenta: prod.precioVenta,
+        categoria: prod.nombreCategoria,
+      });
+      setIsPrintModalOpen(true);
+    } else {
+      toast.error('El producto no tiene un código de barras asignado.');
+    }
+  };
+
+  // Agregar al carrito
+  const handleAddToCart = (prod: Producto) => {
+    addItem(prod, 1);
+    toast.success(`+1 ${prod.nombre}`);
+  };
 
   return (
     <div className="space-y-3 pb-24">
-      {/* Cabecera & Botón Nuevo */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h2 className="text-xl font-black text-slate-800">Catálogo & Stock</h2>
-          <p className="text-xs font-semibold text-slate-500">
-            {productos.length} productos registrados
-          </p>
-        </div>
-        <Button
-          variant="primary"
-          size="sm"
-          onClick={() => setIsModalOpen(true)}
-          icon={<Plus className="w-4 h-4 stroke-[3]" />}
-        >
-          NUEVO
-        </Button>
-      </div>
+      {/* Cabecera & Acciones Principales */}
+      <ProductsHeader
+        totalRegistros={totalRegistros}
+        onOpenCategories={() => setIsCategoryModalOpen(true)}
+        onOpenCreate={handleOpenCreate}
+      />
 
-      {/* Buscador */}
+      {/* Buscador conectado al servidor */}
       <div className="relative">
         <Search className="w-5 h-5 absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
         <input
@@ -124,219 +257,248 @@ export const ProductsScreen: React.FC = () => {
           placeholder="Buscar por nombre o código de barras..."
           value={search}
           onChange={(e) => setSearch(e.target.value)}
-          className="w-full h-12 bg-white rounded-2xl pl-11 pr-4 text-sm border border-slate-200/90 shadow-xs outline-none focus:border-red-500"
+          className="w-full h-12 bg-white rounded-2xl pl-11 pr-4 text-sm border border-slate-200/90 shadow-xs outline-none focus:border-red-500 font-medium"
         />
       </div>
 
       {/* Carrusel Deslizable de Categorías */}
-      <CategoryCarousel
-        categorias={categorias}
-        totalProductos={productos.length}
-        selectedCategoria={selectedCategoria}
-        onSelectCategoria={setSelectedCategoria}
-      />
+      <div className="relative">
+        <CategoryCarousel
+          categorias={categorias}
+          totalProductos={totalRegistros}
+          selectedCategoria={selectedCategoria}
+          onSelectCategoria={handleSelectCategoria}
+        />
+      </div>
 
-      {/* Lista de Productos en Tarjetas Móviles */}
+      {/* Listado de Productos */}
       {isLoading ? (
         <div className="py-20 flex flex-col items-center justify-center text-slate-400">
           <div className="w-8 h-8 border-3 border-red-500 border-t-transparent rounded-full animate-spin mb-3" />
-          <span className="text-xs font-bold">Cargando inventario...</span>
+          <span className="text-xs font-bold">Cargando catálogo...</span>
         </div>
-      ) : filtered.length === 0 ? (
+      ) : productos.length === 0 ? (
         <div className="py-16 text-center bg-white rounded-3xl p-6 border border-slate-200 shadow-xs">
           <Sparkles className="w-10 h-10 text-slate-300 mx-auto mb-2" />
           <p className="font-bold text-slate-700 text-sm">No se encontraron productos</p>
+          <button
+            type="button"
+            onClick={handleOpenCreate}
+            className="mt-3 px-4 py-2 bg-red-50 text-red-600 rounded-xl text-xs font-bold border border-red-200 cursor-pointer hover:bg-red-100"
+          >
+            + Registrar primer producto
+          </button>
         </div>
       ) : (
         <div className="space-y-2">
-          {filtered.map((prod) => {
-            const stockBajo = prod.stockActual <= (prod.stockMinimo || 5);
+          {productos.map((prod) => {
             const inCart = items.find((i) => i.producto.idProducto === prod.idProducto);
-
             return (
-              <div
+              <ProductCard
                 key={prod.idProducto}
-                className={`bg-white rounded-2xl p-3.5 border shadow-xs flex items-center justify-between gap-3 transition-all ${
-                  inCart ? 'border-red-400 ring-2 ring-red-500/10' : 'border-slate-200/90'
-                }`}
-              >
-                <div className="flex items-center gap-3 min-w-0">
-                  <div className="w-10 h-10 rounded-xl bg-slate-100 flex items-center justify-center text-slate-500 shrink-0">
-                    {prod.permiteDecimales ? (
-                      <Scale className="w-5 h-5 text-indigo-500" />
-                    ) : (
-                      <Package className="w-5 h-5 text-slate-600" />
-                    )}
-                  </div>
-                  <div className="min-w-0">
-                    <h4 className="font-bold text-sm text-slate-800 truncate">
-                      {prod.nombre}
-                    </h4>
-                    <div className="flex items-center gap-2 mt-0.5">
-                      <span className="text-[11px] font-semibold text-slate-400">
-                        {prod.codigoBarras || 'Sin código'}
-                      </span>
-                      <span className="text-[10px] font-bold px-1.5 py-0.2 rounded bg-slate-100 text-slate-600 uppercase">
-                        {prod.unidadMedida}
-                      </span>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="flex items-center gap-2.5 shrink-0">
-                  <div className="text-right">
-                    <p className="text-base font-black text-slate-900">
-                      S/ {prod.precioVenta.toFixed(2)}
-                    </p>
-                    <span
-                      className={`inline-block text-[10px] font-black px-2 py-0.5 rounded-full mt-0.5 ${
-                        stockBajo
-                          ? 'bg-rose-100 text-rose-700'
-                          : 'bg-emerald-100 text-emerald-800'
-                      }`}
-                    >
-                      Stock: {prod.stockActual}
-                    </span>
-                  </div>
-
-                  {/* Botón rápido para agregar al carrito de Venta */}
-                  <button
-                    type="button"
-                    onClick={() => {
-                      addItem(prod, 1);
-                      toast.success(`+1 ${prod.nombre}`);
-                    }}
-                    className={`w-9 h-9 rounded-xl flex items-center justify-center font-bold text-xs shadow-xs transition-all cursor-pointer active:scale-95 ${
-                      inCart
-                        ? 'bg-red-500 text-white'
-                        : 'bg-slate-100 hover:bg-slate-200 text-slate-700'
-                    }`}
-                    title="Agregar a la venta"
-                  >
-                    {inCart ? (
-                      <span className="font-black text-xs">{inCart.cantidad}</span>
-                    ) : (
-                      <Plus className="w-4 h-4 stroke-[2.5]" />
-                    )}
-                  </button>
-                </div>
-              </div>
+                producto={prod}
+                inCartQuantity={inCart?.cantidad}
+                onEdit={handleOpenEdit}
+                onAddToCart={handleAddToCart}
+              />
             );
           })}
+
+          {/* Controles de Paginación */}
+          <ProductPagination
+            pagina={pagina}
+            totalPaginas={totalPaginas}
+            totalRegistros={totalRegistros}
+            isLoading={isLoading}
+            onPrevPage={() => {
+              const prev = Math.max(1, pagina - 1);
+              setPagina(prev);
+              loadData(prev, selectedCategoria, search);
+            }}
+            onNextPage={() => {
+              const next = Math.min(totalPaginas, pagina + 1);
+              setPagina(next);
+              loadData(next, selectedCategoria, search);
+            }}
+          />
         </div>
       )}
 
-      {/* Modal Crear Producto */}
-      <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} title="Registrar Producto">
-        <form onSubmit={handleSaveProduct} className="space-y-3">
-          <div>
-            <label className="text-xs font-bold text-slate-700 uppercase">Nombre del Producto</label>
-            <input
-              type="text"
-              placeholder="ej: Arroz Costeño 1kg"
-              value={nombre}
-              onChange={(e) => setNombre(e.target.value)}
-              className="w-full h-11 bg-slate-50 border border-slate-200 rounded-xl px-3 text-sm mt-1 outline-none"
-              required
-            />
-          </div>
+      {/* MODAL: FORMULARIO DE PRODUCTO (CREAR / EDITAR) */}
+      <ProductFormModal
+        isOpen={isFormModalOpen}
+        onClose={() => {
+          setIsFormModalOpen(false);
+          setEditingProduct(null);
+        }}
+        editingProduct={editingProduct}
+        categorias={categorias}
+        localProducts={productos}
+        onOpenCategoryManager={() => setIsCategoryModalOpen(true)}
+        onOpenBarcodeScanner={() => setIsBarcodeScannerOpen(true)}
+        scannedBarcode={scannedBarcode}
+        onClearScannedBarcode={() => setScannedBarcode(null)}
+        onSubmit={handleFormSubmit}
+        onPrintBarcode={handleOpenPrintBarcode}
+        onDeleteProduct={(prod) => setProductToDelete(prod)}
+        isSubmitting={isSubmitting}
+      />
 
-          <div className="grid grid-cols-2 gap-2">
-            <div>
-              <label className="text-xs font-bold text-slate-700 uppercase">Categoría</label>
-              <select
-                value={idCategoria}
-                onChange={(e) => setIdCategoria(Number(e.target.value))}
-                className="w-full h-11 bg-slate-50 border border-slate-200 rounded-xl px-2 text-xs mt-1 outline-none font-semibold"
-              >
-                {categorias.map((c) => (
-                  <option key={c.idCategoria} value={c.idCategoria}>
-                    {c.nombre}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div>
-              <label className="text-xs font-bold text-slate-700 uppercase">Unidad Medida</label>
-              <select
-                value={unidadMedida}
-                onChange={(e) => {
-                  const val = e.target.value;
-                  setUnidadMedida(val);
-                  setPermiteDecimales(val === 'KG' || val === 'LITRO' || val === 'METRO');
-                }}
-                className="w-full h-11 bg-slate-50 border border-slate-200 rounded-xl px-2 text-xs mt-1 outline-none font-semibold"
-              >
-                <option value="UNIDAD">Unidad</option>
-                <option value="KG">Kilogramo (kg)</option>
-                <option value="LITRO">Litro</option>
-                <option value="METRO">Metro</option>
-              </select>
-            </div>
-          </div>
+      {/* MODAL: GESTIÓN DE CATEGORÍAS */}
+      <CategoryManagerModal
+        isOpen={isCategoryModalOpen}
+        onClose={() => setIsCategoryModalOpen(false)}
+        categorias={categorias}
+        onCategoriesChanged={async () => {
+          await refreshCategorias();
+          loadData(1, selectedCategoria, search, true);
+        }}
+        onCategorySelected={async (newId) => {
+          await refreshCategorias();
+          setSelectedCategoria(newId);
+          loadData(1, newId, search, true);
+        }}
+      />
 
-          <div>
-            <label className="text-xs font-bold text-slate-700 uppercase">Código de Barras</label>
-            <input
-              type="text"
-              placeholder="7750123456789"
-              value={codigoBarras}
-              onChange={(e) => setCodigoBarras(e.target.value)}
-              className="w-full h-11 bg-slate-50 border border-slate-200 rounded-xl px-3 text-sm mt-1 outline-none"
-            />
-          </div>
+      {/* MODAL: ESCÁNER DE CÓDIGO DE BARRAS POR CÁMARA */}
+      <BarcodeScannerModal
+        isOpen={isBarcodeScannerOpen}
+        onClose={() => setIsBarcodeScannerOpen(false)}
+        onScan={(code) => {
+          setScannedBarcode(code);
+          setIsBarcodeScannerOpen(false);
+          toast.success(`Código escaneado: ${code}`);
+        }}
+      />
 
-          <div className="grid grid-cols-2 gap-2">
-            <div>
-              <label className="text-xs font-bold text-slate-700 uppercase">Precio Venta (S/)</label>
-              <input
-                type="number"
-                step="0.10"
-                placeholder="0.00"
-                value={precioVenta}
-                onChange={(e) => setPrecioVenta(e.target.value)}
-                className="w-full h-11 bg-slate-50 border border-slate-200 rounded-xl px-3 text-sm font-bold mt-1 outline-none"
-                required
-              />
-            </div>
-            <div>
-              <label className="text-xs font-bold text-slate-700 uppercase">Precio Costo (S/)</label>
-              <input
-                type="number"
-                step="0.10"
-                placeholder="0.00"
-                value={precioCosto}
-                onChange={(e) => setPrecioCosto(e.target.value)}
-                className="w-full h-11 bg-slate-50 border border-slate-200 rounded-xl px-3 text-sm font-bold mt-1 outline-none"
-              />
-            </div>
-          </div>
+      {/* MODAL: CONFIRMACIÓN DE GUARDADO / ACTUALIZACIÓN */}
+      <ConfirmModal
+        isOpen={isConfirmModalOpen}
+        onClose={() => setIsConfirmModalOpen(false)}
+        onConfirm={executeSaveProduct}
+        title={pendingFormData?.idProducto ? '¿Actualizar Producto?' : '¿Confirmar Registro?'}
+        description={
+          pendingFormData?.idProducto
+            ? 'Los cambios se aplicarán de inmediato en el catálogo de productos.'
+            : 'Verifica los datos del producto antes de agregarlo al catálogo.'
+        }
+        confirmText={pendingFormData?.idProducto ? 'Sí, Actualizar' : 'Sí, Guardar'}
+        cancelText="Volver a Revisar"
+        variant="primary"
+        isLoading={isSubmitting}
+        details={
+          pendingFormData
+            ? [
+                { label: 'Producto', value: pendingFormData.nombre },
+                {
+                  label: 'Categoría',
+                  value:
+                    categorias.find((c) => c.idCategoria === pendingFormData.idCategoria)?.nombre ||
+                    'General',
+                },
+                {
+                  label: 'Código de Barras',
+                  value: pendingFormData.codigoBarras || '(Autogenerado)',
+                },
+                {
+                  label: 'Precio de Venta',
+                  value: `S/ ${pendingFormData.precioVenta.toFixed(2)}`,
+                  highlight: true,
+                },
+                {
+                  label: 'Stock Inicial',
+                  value: `${pendingFormData.stockActual || '0'} ${pendingFormData.unidadMedida}`,
+                },
+              ]
+            : undefined
+        }
+      />
 
-          <div>
-            <label className="text-xs font-bold text-slate-700 uppercase">Stock Inicial</label>
-            <input
-              type="number"
-              step={permiteDecimales ? '0.1' : '1'}
-              placeholder="0"
-              value={stockActual}
-              onChange={(e) => setStockActual(e.target.value)}
-              className="w-full h-11 bg-slate-50 border border-slate-200 rounded-xl px-3 text-sm font-bold mt-1 outline-none"
-            />
-          </div>
+      {/* MODAL: ÉXITO DE OPERACIÓN */}
+      <SuccessModal
+        isOpen={isSuccessModalOpen}
+        onClose={() => {
+          setIsSuccessModalOpen(false);
+          setSavedProductSummary(null);
+        }}
+        title={
+          savedProductSummary?.isEditing
+            ? '¡Producto Actualizado!'
+            : '¡Producto Registrado con Éxito!'
+        }
+        message="El producto ha sido guardado exitosamente en la base de datos y ya está disponible para ventas."
+        primaryActionText="Ver en Catálogo"
+        onPrimaryAction={() => {
+          setIsSuccessModalOpen(false);
+          setSavedProductSummary(null);
+        }}
+        secondaryActionText={!savedProductSummary?.isEditing ? '+ Registrar Otro Producto' : undefined}
+        onSecondaryAction={() => {
+          setIsSuccessModalOpen(false);
+          setSavedProductSummary(null);
+          handleOpenCreate();
+        }}
+        extraActionText="Imprimir con Ticketera"
+        extraActionIcon={<Printer className="w-4 h-4 text-slate-700" />}
+        onExtraAction={() => {
+          if (
+            savedProductSummary &&
+            savedProductSummary.codigoBarras &&
+            savedProductSummary.codigoBarras !== '(Autogenerado)'
+          ) {
+            setPrintBarcodeData({
+              nombre: savedProductSummary.nombre,
+              codigoBarras: savedProductSummary.codigoBarras,
+              precioVenta: savedProductSummary.precioVenta,
+              categoria: savedProductSummary.categoria,
+            });
+            setIsPrintModalOpen(true);
+          } else {
+            toast.error('Código de barras no disponible para imprimir');
+          }
+        }}
+        details={
+          savedProductSummary
+            ? [
+                { label: 'Producto', value: savedProductSummary.nombre },
+                { label: 'Categoría', value: savedProductSummary.categoria },
+                { label: 'Código', value: savedProductSummary.codigoBarras },
+                { label: 'Precio Venta', value: savedProductSummary.precioVenta, highlight: true },
+                { label: 'Stock en Almacén', value: savedProductSummary.stock },
+              ]
+            : undefined
+        }
+      />
 
-          <div className="pt-2">
-            <Button
-              type="submit"
-              variant="primary"
-              size="lg"
-              fullWidth
-              isLoading={isSubmitting}
-            >
-              GUARDAR PRODUCTO
-            </Button>
-          </div>
-        </form>
-      </Modal>
+      {/* MODAL: CONFIRMACIÓN DE ELIMINACIÓN */}
+      <ConfirmModal
+        isOpen={Boolean(productToDelete)}
+        onClose={() => setProductToDelete(null)}
+        onConfirm={executeDeleteProduct}
+        title="¿Eliminar Producto?"
+        description={`¿Estás seguro de que deseas eliminar "${productToDelete?.nombre}" del catálogo? Esta acción no se puede deshacer.`}
+        confirmText="Sí, Eliminar"
+        cancelText="Cancelar"
+        variant="danger"
+        details={
+          productToDelete
+            ? [
+                { label: 'Producto', value: productToDelete.nombre },
+                { label: 'Código', value: productToDelete.codigoBarras || '(Sin código)' },
+                { label: 'Precio', value: `S/ ${productToDelete.precioVenta.toFixed(2)}` },
+              ]
+            : undefined
+        }
+      />
+
+      {/* MODAL: IMPRESIÓN DE CÓDIGO DE BARRAS EN TICKETERA */}
+      <BarcodePrintModal
+        isOpen={isPrintModalOpen}
+        onClose={() => setIsPrintModalOpen(false)}
+        data={printBarcodeData}
+      />
     </div>
   );
 };
+
+export default ProductsScreen;

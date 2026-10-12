@@ -8,6 +8,7 @@ interface ModalProps {
   children: React.ReactNode;
   position?: 'bottom' | 'center';
   maxWidth?: string;
+  zIndex?: string;
 }
 
 export const Modal: React.FC<ModalProps> = ({
@@ -17,6 +18,7 @@ export const Modal: React.FC<ModalProps> = ({
   children,
   position = 'bottom',
   maxWidth = 'max-w-md',
+  zIndex = 'z-50',
 }) => {
   useEffect(() => {
     if (isOpen) {
@@ -32,7 +34,7 @@ export const Modal: React.FC<ModalProps> = ({
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex flex-col justify-end sm:justify-center items-center">
+    <div className={`fixed inset-0 ${zIndex} flex flex-col justify-end sm:justify-center items-center`}>
       {/* Backdrop */}
       <div
         className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm transition-opacity"
