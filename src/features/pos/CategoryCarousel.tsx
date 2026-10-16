@@ -122,12 +122,12 @@ export const CategoryCarousel: React.FC<CategoryCarouselProps> = ({
           onClick={(e) => handlePillClick(null, e)}
           className={`h-9 px-3.5 rounded-full text-xs font-black whitespace-nowrap transition-all duration-150 cursor-pointer border flex items-center gap-1.5 shrink-0 ${
             selectedCategoria === null
-              ? 'bg-slate-900 text-white border-slate-900 shadow-sm shadow-slate-900/30 scale-[1.02]'
+              ? 'bg-[#3D987A] text-white border-[#3D987A] shadow-sm shadow-emerald-700/25 scale-[1.02]'
               : 'bg-white text-slate-700 border-slate-200/90 hover:bg-slate-50 hover:border-slate-300'
           }`}
         >
-          <Layers className={`w-3.5 h-3.5 ${selectedCategoria === null ? 'text-red-400' : 'text-slate-400'}`} />
-          <span>Todos ({totalProductos})</span>
+          <Layers className={`w-3.5 h-3.5 ${selectedCategoria === null ? 'text-emerald-100' : 'text-slate-400'}`} />
+          <span>Todas ({totalProductos})</span>
         </button>
 
         {/* Píldoras de Categorías */}
@@ -140,7 +140,7 @@ export const CategoryCarousel: React.FC<CategoryCarouselProps> = ({
               onClick={(e) => handlePillClick(cat.idCategoria, e)}
               className={`h-9 px-3.5 rounded-full text-xs font-extrabold whitespace-nowrap transition-all duration-150 cursor-pointer border flex items-center gap-1.5 shrink-0 ${
                 isSelected
-                  ? 'bg-red-500 text-white border-red-500 shadow-md shadow-red-500/25 scale-[1.02]'
+                  ? 'bg-[#3D987A] text-white border-[#3D987A] shadow-md shadow-emerald-700/25 scale-[1.02]'
                   : 'bg-white text-slate-700 border-slate-200/90 hover:bg-slate-50 hover:border-slate-300'
               }`}
             >

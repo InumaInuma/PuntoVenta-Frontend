@@ -9,9 +9,11 @@ import { MobileAppLayout } from '@/layouts/MobileAppLayout';
 import { LoginScreen } from '@/features/auth/LoginScreen';
 import { PosScreen } from '@/features/pos/PosScreen';
 import { ProductsScreen } from '@/features/products/ProductsScreen';
+import { InventoryScreen } from '@/features/products/InventoryScreen';
 import { CustomersScreen } from '@/features/customers/CustomersScreen';
 import { CashManagementScreen } from '@/features/cash/CashManagementScreen';
 import { SalesHistoryScreen } from '@/features/history/SalesHistoryScreen';
+import { QuotesScreen } from '@/features/quotes/QuotesScreen';
 import { SettingsScreen } from '@/features/settings/SettingsScreen';
 import { SuperAdminDashboard } from '@/features/admin/SuperAdminDashboard';
 
@@ -107,9 +109,11 @@ export const App: React.FC = () => {
             >
               <Route index element={<PosScreen />} />
               <Route path={ROUTES.PRODUCTOS.replace('/', '')} element={<ProductsScreen />} />
+              <Route path={ROUTES.INVENTARIO.replace('/', '')} element={<InventoryScreen />} />
               <Route path={ROUTES.CLIENTES.replace('/', '')} element={<CustomersScreen />} />
               <Route path={ROUTES.CAJA.replace('/', '')} element={<CashManagementScreen />} />
               <Route path={ROUTES.HISTORIAL.replace('/', '')} element={<SalesHistoryScreen />} />
+              <Route path={ROUTES.COTIZACIONES.replace('/', '')} element={<QuotesScreen />} />
               <Route path={ROUTES.CONFIGURACION.replace('/', '')} element={<SettingsScreen />} />
             </Route>
 

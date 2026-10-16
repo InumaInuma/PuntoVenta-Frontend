@@ -126,8 +126,17 @@ export class BarcodeScannerService {
     container.appendChild(video);
     this.activeVideoElement = video;
 
-    await video.play();
-    this.isScanning = true;
+    try {
+      await video.play();
+      this.isScanning = true;
+    } catch (err: any) {
+      if (err?.name === 'AbortError') {
+        // Normal cuando el usuario cambia de pantalla antes de que cargue el stream
+        return;
+      }
+      console.warn('Error al reproducir stream de cámara:', err);
+      return;
+    }
 
     // Bucle continuo de detección por fotograma
     const scanLoop = async () => {

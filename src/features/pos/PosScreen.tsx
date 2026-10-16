@@ -6,7 +6,7 @@ import { categoriasService } from '@/services/backend/categoriasService';
 import type { Categoria, Producto } from '@/types';
 import { InlineBarcodeScanner } from './InlineBarcodeScanner';
 import { CheckoutModal } from './CheckoutModal';
-import { ReceiptModal } from './ReceiptModal';
+import { ReceiptModal, type ReceiptSaleData } from './ReceiptModal';
 import { Modal } from '@/components/ui/Modal';
 import {
   ShoppingBag,
@@ -36,16 +36,7 @@ export const PosScreen: React.FC = () => {
   const [ventaLibreMonto, setVentaLibreMonto] = useState('');
   const [manualCodeInput, setManualCodeInput] = useState('');
 
-  const [receiptData, setReceiptData] = useState<{
-    idVenta: number;
-    codigoVenta: string;
-    total: number;
-    vuelto: number;
-    metodoPago: string;
-    cliente?: string;
-    clienteDocumento?: string;
-    tipoComprobante?: string;
-  } | null>(null);
+  const [receiptData, setReceiptData] = useState<ReceiptSaleData | null>(null);
 
   const [lastScannedFeedback, setLastScannedFeedback] = useState<string | null>(null);
 
@@ -177,7 +168,7 @@ export const PosScreen: React.FC = () => {
   };
 
   return (
-    <div className="flex flex-col space-y-3 pb-24">
+    <div className="flex flex-col space-y-3 pb-24 lg:pb-8 max-w-2xl mx-auto w-full">
       {/* Alerta si el turno de caja no está abierto */}
       {!turnoActivo && (
         <div className="bg-amber-50 border border-amber-200 rounded-2xl p-3 flex items-center gap-2.5 text-amber-800 text-xs font-semibold">

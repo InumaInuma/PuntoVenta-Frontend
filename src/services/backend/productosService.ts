@@ -44,6 +44,7 @@ export const productosService = {
       stockActual: p.stockActual !== undefined ? p.stockActual : (p.StockActual !== undefined ? p.StockActual : 0),
       stockMinimo: p.stockMinimo !== undefined ? p.stockMinimo : 1,
       permiteDecimales: !!(p.permiteDecimales || p.PermiteDecimales),
+      imagenUrl: p.imagenUrl || p.ImagenUrl || undefined,
       activo: p.activo !== undefined ? p.activo : (p.Activo !== undefined ? p.Activo : true),
     }));
 
@@ -81,6 +82,7 @@ export const productosService = {
       stockActual: p.stockActual !== undefined ? p.stockActual : (p.StockActual !== undefined ? p.StockActual : 0),
       stockMinimo: p.stockMinimo !== undefined ? p.stockMinimo : 1,
       permiteDecimales: !!(p.permiteDecimales || p.PermiteDecimales),
+      imagenUrl: p.imagenUrl || p.ImagenUrl || undefined,
       activo: p.activo !== undefined ? p.activo : (p.Activo !== undefined ? p.Activo : true),
     };
   },
@@ -107,6 +109,7 @@ export const productosService = {
       stockActual: p.stockActual !== undefined ? p.stockActual : (p.StockActual !== undefined ? p.StockActual : 0),
       stockMinimo: p.stockMinimo !== undefined ? p.stockMinimo : 1,
       permiteDecimales: !!(p.permiteDecimales || p.PermiteDecimales),
+      imagenUrl: p.imagenUrl || p.ImagenUrl || undefined,
       activo: p.activo !== undefined ? p.activo : (p.Activo !== undefined ? p.Activo : true),
     };
   },
@@ -125,6 +128,7 @@ export const productosService = {
       codigoBarras: data.codigoBarras || '',
       nombre: data.nombre?.trim(),
       descripcion: data.descripcion || '',
+      imagenUrl: data.imagenUrl || null,
       precioVenta: data.precioVenta,
       precioCosto: data.precioCosto || 0,
       stockInicial: data.stockActual || 0,
@@ -150,6 +154,7 @@ export const productosService = {
       codigoBarras: data.codigoBarras || '',
       nombre: data.nombre?.trim(),
       descripcion: data.descripcion || '',
+      imagenUrl: data.imagenUrl || null,
       precioVenta: data.precioVenta,
       precioCosto: data.precioCosto || 0,
       stockMinimo: data.stockMinimo || 1,
@@ -161,6 +166,21 @@ export const productosService = {
 
   delete: async (id: number): Promise<void> => {
     await api.delete<ApiResponse<void>>(`/productos/${id}`);
+  },
+
+  subirImagen: async (file: File): Promise<{ rutaRelativa: string; urlPublica: string }> => {
+    const formData = new FormData();
+    formData.append('archivo', file);
+    const response = await api.post<ApiResponse<{ rutaRelativa: string; urlPublica: string }>>(
+      '/productos/subir-imagen',
+      formData,
+      {
+        headers: {
+          'Content-Type': 'multipart/form-data',
+        },
+      }
+    );
+    return response.data;
   },
 };
 

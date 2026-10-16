@@ -48,15 +48,20 @@ export const printThermalReceipt = (data: ThermalReceiptData): Promise<void> => 
       : new Date().toLocaleString('es-PE');
 
     const rawTipo = (data.tipoComprobante || 'NOTA DE VENTA').toUpperCase();
+    const isCotizacion = rawTipo.includes('COTIZACI') || rawTipo.includes('PROFORMA');
     const tipoDoc =
-      rawTipo.includes('BOLETA') || rawTipo === 'BOL'
+      isCotizacion
+        ? 'COTIZACIÓN / PROFORMA'
+        : rawTipo.includes('BOLETA') || rawTipo === 'BOL'
         ? 'BOLETA DE VENTA'
         : rawTipo.includes('FACTURA') || rawTipo === 'FAC'
         ? 'FACTURA'
         : 'NOTA DE VENTA';
 
     const etiquetaDoc =
-      tipoDoc === 'NOTA DE VENTA'
+      isCotizacion
+        ? 'Cotización'
+        : tipoDoc === 'NOTA DE VENTA'
         ? 'Nota de Venta'
         : tipoDoc === 'BOLETA DE VENTA'
         ? 'Boleta'
@@ -302,36 +307,62 @@ export const printThermalReceipt = (data: ThermalReceiptData): Promise<void> => 
 
           <div class="divider"></div>
 
+          ${
+            data.descuento && data.descuento > 0
+              ? `
+            <div class="payment-row">
+              <span>Subtotal:</span>
+              <span>S/ ${(data.subtotal ?? (data.total + data.descuento)).toFixed(2)}</span>
+            </div>
+            <div class="payment-row">
+              <span>Descuento:</span>
+              <span class="bold">- S/ ${data.descuento.toFixed(2)}</span>
+            </div>
+          `
+              : ''
+          }
+
           <!-- Total a Cobrar -->
           <div class="total-row">
             <span>TOTAL:</span>
             <span>S/ ${data.total.toFixed(2)}</span>
           </div>
 
-          <!-- Desglose de Pagos -->
-          <div class="payment-row">
-            <span>Pago:</span>
-            <span class="bold">${data.metodoPago}</span>
-          </div>
           ${
-            data.montoRecibido && data.montoRecibido > 0
+            isCotizacion
               ? `
             <div class="payment-row">
-              <span>Pago con:</span>
-              <span>S/ ${data.montoRecibido.toFixed(2)}</span>
+              <span>Condición:</span>
+              <span class="bold">Cotización (Validez 7 días)</span>
             </div>
           `
-              : ''
-          }
-          ${
-            data.vuelto && data.vuelto > 0
-              ? `
+              : `
+            <!-- Desglose de Pagos -->
             <div class="payment-row">
-              <span>Vuelto:</span>
-              <span class="bold">S/ ${data.vuelto.toFixed(2)}</span>
+              <span>Pago:</span>
+              <span class="bold">${data.metodoPago}</span>
             </div>
+            ${
+              data.montoRecibido && data.montoRecibido > 0
+                ? `
+              <div class="payment-row">
+                <span>Pago con:</span>
+                <span>S/ ${data.montoRecibido.toFixed(2)}</span>
+              </div>
+            `
+                : ''
+            }
+            ${
+              data.vuelto && data.vuelto > 0
+                ? `
+              <div class="payment-row">
+                <span>Vuelto:</span>
+                <span class="bold">S/ ${data.vuelto.toFixed(2)}</span>
+              </div>
+            `
+                : ''
+            }
           `
-              : ''
           }
 
           <div class="divider"></div>

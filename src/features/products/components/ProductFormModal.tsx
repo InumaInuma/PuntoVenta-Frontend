@@ -3,6 +3,7 @@ import { Modal } from '@/components/ui/Modal';
 import type { Producto, Categoria } from '@/types';
 import { Camera, Barcode, Printer, Trash2 } from 'lucide-react';
 import { productosService } from '@/services/backend/productosService';
+import { comprimirAWebP } from '@/utils/imageCompressor';
 import toast from 'react-hot-toast';
 
 export interface ProductFormData {
@@ -15,6 +16,7 @@ export interface ProductFormData {
   precioCosto?: number;
   stockActual: number;
   permiteDecimales: boolean;
+  imagenUrl?: string;
 }
 
 interface ProductFormModalProps {
@@ -56,7 +58,10 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
   const [stockActual, setStockActual] = useState('');
   const [unidadMedida, setUnidadMedida] = useState('UNIDAD');
   const [permiteDecimales, setPermiteDecimales] = useState(false);
+  const [imagenUrl, setImagenUrl] = useState<string>('');
   const [serverDuplicate, setServerDuplicate] = useState<string | null>(null);
+
+  const fileInputRef = React.useRef<HTMLInputElement | null>(null);
 
   // Sincronizar formulario al abrir o cambiar de producto en edición
   useEffect(() => {
@@ -71,6 +76,7 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
       setStockActual(editingProduct.stockActual.toString());
       setUnidadMedida(editingProduct.unidadMedida || 'UNIDAD');
       setPermiteDecimales(editingProduct.permiteDecimales);
+      setImagenUrl(editingProduct.imagenUrl || '');
     } else {
       setNombre('');
       setCodigoBarras('');
@@ -80,6 +86,7 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
       setStockActual('');
       setUnidadMedida('UNIDAD');
       setPermiteDecimales(false);
+      setImagenUrl('');
     }
     setServerDuplicate(null);
   }, [isOpen, editingProduct, categorias]);
@@ -128,6 +135,37 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
 
     return () => clearTimeout(timer);
   }, [codigoBarras, localProducts, editingProduct]);
+
+  // Procesamiento y compresión de imagen seleccionada a WebP (< 100 KB)
+  const handleImageChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (!file.type.startsWith('image/')) {
+      toast.error('Selecciona un archivo de imagen válido');
+      return;
+    }
+
+    if (file.size > 15 * 1024 * 1024) {
+      toast.error('La imagen no debe superar los 15 MB');
+      return;
+    }
+
+    try {
+      const webpDataUrl = await comprimirAWebP(file, 800, 0.82);
+      setImagenUrl(webpDataUrl);
+      toast.success('Foto optimizada en formato WebP (< 100 KB)');
+    } catch {
+      toast.error('Error al procesar la imagen');
+    }
+  };
+
+  const handleRemoveImage = () => {
+    setImagenUrl('');
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
+  };
 
   // Autogenerar código EAN-13 único desde el backend
   const handleGenerateBarcode = async () => {
@@ -178,6 +216,7 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
       precioCosto: precioCosto ? parseFloat(precioCosto) : undefined,
       stockActual: stockActual ? parseFloat(stockActual) : 0,
       permiteDecimales,
+      imagenUrl: imagenUrl.trim() || undefined,
     });
   };
 
@@ -205,10 +244,66 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
           />
         </div>
 
-        {/* CATEGORÍA Y UNIDAD MEDIDA */}
+        {/* FOTO DEL PRODUCTO */}
+        <div>
+          <div className="flex items-center justify-between h-5 mb-1">
+            <label className="text-xs font-black text-slate-700 uppercase tracking-wide">
+              FOTO DEL PRODUCTO
+            </label>
+            {imagenUrl && (
+              <button
+                type="button"
+                onClick={handleRemoveImage}
+                className="text-[11px] font-bold text-rose-500 hover:text-rose-600 cursor-pointer"
+              >
+                Quitar foto
+              </button>
+            )}
+          </div>
+          <input
+            type="file"
+            ref={fileInputRef}
+            onChange={handleImageChange}
+            accept="image/*"
+            className="hidden"
+          />
+
+          {imagenUrl ? (
+            <div className="flex items-center gap-3 p-2 bg-slate-50 border border-slate-200 rounded-xl">
+              <div className="w-14 h-14 rounded-lg overflow-hidden bg-white border border-slate-200 shrink-0 shadow-xs">
+                <img
+                  src={imagenUrl}
+                  alt="Vista previa"
+                  className="w-full h-full object-cover"
+                />
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-xs font-bold text-slate-800">Foto cargada</p>
+                <button
+                  type="button"
+                  onClick={() => fileInputRef.current?.click()}
+                  className="text-[11px] font-bold text-red-500 hover:text-red-600 underline cursor-pointer mt-0.5"
+                >
+                  Cambiar imagen
+                </button>
+              </div>
+            </div>
+          ) : (
+            <button
+              type="button"
+              onClick={() => fileInputRef.current?.click()}
+              className="w-full h-12 bg-slate-50 hover:bg-red-50/30 border border-dashed border-slate-200 hover:border-red-400 rounded-xl flex items-center justify-center gap-2 text-slate-500 hover:text-red-600 transition-all cursor-pointer"
+            >
+              <Camera className="w-4 h-4 text-slate-400 group-hover:text-red-500" />
+              <span className="text-xs font-bold">Subir foto del producto</span>
+            </button>
+          )}
+        </div>
+
+        {/* CATEGORÍA Y UNIDAD MEDIDA (Alineadas en la misma línea) */}
         <div className="grid grid-cols-2 gap-2.5">
-          <div>
-            <div className="flex items-center justify-between">
+          <div className="flex flex-col">
+            <div className="flex items-center justify-between h-5 mb-1">
               <label className="text-xs font-black text-slate-700 uppercase tracking-wide">
                 CATEGORÍA
               </label>
@@ -224,7 +319,7 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
             <select
               value={idCategoria}
               onChange={(e) => setIdCategoria(Number(e.target.value))}
-              className="w-full h-12 bg-slate-50 border border-slate-200 rounded-xl px-3 text-xs mt-1 outline-none font-bold text-slate-800 focus:border-red-500 focus:bg-white transition-all"
+              className="w-full h-12 bg-slate-50 border border-slate-200 rounded-xl px-3 text-xs outline-none font-bold text-slate-800 focus:border-red-500 focus:bg-white transition-all"
             >
               {categorias.map((c) => (
                 <option key={c.idCategoria} value={c.idCategoria}>
@@ -234,10 +329,12 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
             </select>
           </div>
 
-          <div>
-            <label className="text-xs font-black text-slate-700 uppercase tracking-wide">
-              UNIDAD MEDIDA
-            </label>
+          <div className="flex flex-col">
+            <div className="flex items-center justify-between h-5 mb-1">
+              <label className="text-xs font-black text-slate-700 uppercase tracking-wide">
+                UNIDAD MEDIDA
+              </label>
+            </div>
             <select
               value={unidadMedida}
               onChange={(e) => {
@@ -245,7 +342,7 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
                 setUnidadMedida(val);
                 setPermiteDecimales(val === 'KG' || val === 'LITRO' || val === 'METRO');
               }}
-              className="w-full h-12 bg-slate-50 border border-slate-200 rounded-xl px-3 text-xs mt-1 outline-none font-bold text-slate-800 focus:border-red-500 focus:bg-white transition-all"
+              className="w-full h-12 bg-slate-50 border border-slate-200 rounded-xl px-3 text-xs outline-none font-bold text-slate-800 focus:border-red-500 focus:bg-white transition-all"
             >
               <option value="UNIDAD">Unidad</option>
               <option value="KG">Kilogramo (kg)</option>

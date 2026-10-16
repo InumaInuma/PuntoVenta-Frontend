@@ -8,6 +8,7 @@ import {
   Users,
   Landmark,
   History,
+  FileText,
   Settings,
   LogOut,
   X,
@@ -15,6 +16,7 @@ import {
   Store,
   ChevronRight,
   ShieldCheck,
+  Boxes,
 } from 'lucide-react';
 
 interface DarkDrawerProps {
@@ -47,10 +49,12 @@ export const DarkDrawer: React.FC<DarkDrawerProps> = ({ isOpen, onClose }) => {
       group: 'OPERACIONES DEL NEGOCIO',
       items: [
         { path: ROUTES.POS, label: 'Punto de Venta (POS)', icon: ShoppingBag },
-        { path: ROUTES.PRODUCTOS, label: 'Productos y Stock', icon: Package },
+        { path: ROUTES.PRODUCTOS, label: 'Catálogo de Ventas', icon: Package },
+        { path: ROUTES.INVENTARIO, label: 'Inventario (Crear / Editar)', icon: Boxes },
         { path: ROUTES.CLIENTES, label: 'Clientes y Fiados', icon: Users },
         { path: ROUTES.CAJA, label: 'Cajas y Turnos', icon: Landmark },
         { path: ROUTES.HISTORIAL, label: 'Historial de Ventas', icon: History },
+        { path: ROUTES.COTIZACIONES, label: 'Cotizaciones / Proformas', icon: FileText },
       ],
     },
     {

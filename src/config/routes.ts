@@ -4,9 +4,11 @@ export const ROUTES = {
   LOGIN: '/login',
   POS: '/',
   PRODUCTOS: '/productos',
+  INVENTARIO: '/inventario',
   CLIENTES: '/clientes',
   CAJA: '/caja',
   HISTORIAL: '/historial',
+  COTIZACIONES: '/cotizaciones',
   CONFIGURACION: '/configuracion',
   ADMIN: '/admin',
 } as const;

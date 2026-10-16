@@ -64,7 +64,7 @@ export const TopHeader: React.FC<TopHeaderProps> = ({ onOpenDrawer }) => {
 
         {/* Avatar Usuario / Drawer */}
         <div
-          className="w-9 h-9 rounded-2xl bg-gradient-to-tr from-sky-500 to-indigo-600 text-white font-extrabold text-xs flex items-center justify-center shadow-xs select-none cursor-pointer"
+          className="w-9 h-9 rounded-2xl bg-gradient-to-tr from-sky-500 to-indigo-600 text-white font-extrabold text-xs flex items-center justify-center shadow-xs select-none cursor-pointer hover:opacity-90 active:scale-95 transition-all"
           title={`${user?.nombre} (${user?.rol})`}
           onClick={onOpenDrawer}
         >
@@ -74,3 +74,5 @@ export const TopHeader: React.FC<TopHeaderProps> = ({ onOpenDrawer }) => {
     </header>
   );
 };
+
+export default TopHeader;

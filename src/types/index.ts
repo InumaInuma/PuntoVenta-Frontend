@@ -61,11 +61,19 @@ export interface Producto {
 }
 
 export interface MetodoPago {
+  id?: number;
   idMetodoPago: number;
-  codigo: string; // EFECTIVO, YAPE, PLIN, TARJETA, FIADO, TRANSFERENCIA
+  codigo: string; // EFECTIVO, YAPE, PLIN, TARJETA, FIADO, TRANSFERENCIA, BILLETERA
+  codigoMetodo?: string;
   nombre: string;
+  nombreMostrado?: string;
   icono?: string;
-  requiereReferencia: boolean;
+  requiereReferencia?: boolean;
+  requiereComprobanteRef?: boolean;
+  imagenQRUrl?: string | null;
+  numeroTitular?: string | null;
+  nombreTitular?: string | null;
+  ordenVisual?: number;
   activo: boolean;
 }
 
@@ -149,13 +157,24 @@ export interface RegistrarVentaPayload {
 }
 
 export interface VentaHistorialItem {
+  id?: number;
   idVenta: number;
   codigoVenta: string;
+  numeroComprobante?: string;
   fechaVenta: string;
-  clienteNombre: string;
-  tipoComprobante: string;
+  clienteNombre?: string;
+  tipoComprobante?: string;
+  comprobanteTipoNombre?: string;
+  tipoVentaNombre?: string;
+  estadoVentaNombre?: string;
+  cajeroNombre?: string;
+  subtotal?: number;
+  descuento?: number;
+  totalVenta?: number;
   total: number;
-  estado: string; // COMPLETADA, ANULADA
+  montoEfectivoRecibido?: number;
+  vueltoEntregado?: number;
+  estado?: string;
   metodosPagoResumen?: string;
   itemsCantidad?: number;
 }

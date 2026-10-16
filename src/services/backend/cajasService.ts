@@ -26,6 +26,35 @@ export interface MovimientoCajaPayload {
   numeroComprobanteGasto?: string;
 }
 
+export interface TurnoCajaHistorial {
+  idTurnoCaja: number;
+  idCaja: number;
+  cajaNombre: string;
+  idUsuario: number;
+  cajeroNombre: string;
+  idEstadoTurnoCaja: number;
+  estadoTurnoCodigo: string;
+  estadoTurnoNombre: string;
+  fechaApertura: string;
+  fechaCierre?: string;
+  montoApertura: number;
+  totalVentasEfectivo: number;
+  totalVentasYape: number;
+  totalVentasPlin: number;
+  totalVentasTarjeta: number;
+  totalVentasTransferencia: number;
+  totalVentasFiado: number;
+  totalVentasGeneral: number;
+  cantidadVentas: number;
+  totalAbonosFiadoEfectivo: number;
+  totalIngresosExtra: number;
+  totalEgresosGastos: number;
+  montoCierreEsperado?: number;
+  montoCierreReal?: number;
+  diferencia?: number;
+  observaciones?: string;
+}
+
 // Mapeador defensivo de TurnoCajaActivoDto (Backend) a TurnoCaja (Frontend)
 const mapTurno = (raw: any): TurnoCaja | null => {
   if (!raw) return null;
@@ -147,6 +176,19 @@ export const cajasService = {
     } catch {
       const response = await api.post<ApiResponse<number>>('/cajas/movimientos', payload);
       return response.data;
+    }
+  },
+
+  /**
+   * Obtiene el historial de turnos de caja con desglose completo de cobros por método de pago
+   */
+  getHistorialTurnos: async (params?: { fechaDesde?: string; fechaHasta?: string; top?: number }): Promise<TurnoCajaHistorial[]> => {
+    try {
+      const response = await api.get<ApiResponse<TurnoCajaHistorial[]>>('/cajas/turnos/historial', { params });
+      return response.data || [];
+    } catch (error) {
+      console.error('Error al obtener historial de turnos:', error);
+      return [];
     }
   },
 };
