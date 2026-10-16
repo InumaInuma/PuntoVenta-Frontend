@@ -47,6 +47,11 @@ export const AuthService = {
     return response;
   },
 
+  registerTenant: async (data: import('./authTypes').RegisterTenantRequest): Promise<import('./authTypes').RegisterTenantResponse> => {
+    const response = await api.post<import('./authTypes').RegisterTenantResponse>('/auth/register-tenant', data);
+    return response;
+  },
+
   logout: () => {
     AuthStorage.clearAuth();
     window.location.href = '/login';

@@ -37,3 +37,32 @@ export interface UserProfile extends Omit<LoginData, 'token'> {
 }
 
 export type LoginResponse = ApiResponse<LoginData>;
+
+export interface RegisterTenantRequest {
+  idPais?: number;
+  nombreComercial: string;
+  razonSocial?: string;
+  tipoDocumento: string;
+  numeroDocumento: string;
+  telefonoWhatsApp: string;
+  correoContacto?: string;
+  direccion?: string;
+  idPlanSaaS: number;
+  diasDuracionPlan?: number;
+  montoPagado?: number;
+  metodoPago?: string;
+  numeroOperacion?: string;
+  nombreCompletoUsuario: string;
+  username: string;
+  passwordProvisorio: string;
+}
+
+export interface RegisterTenantResponseData {
+  tenantId: number;
+  usuarioId: number;
+  nombreComercial: string;
+  username: string;
+  mensaje: string;
+}
+
+export type RegisterTenantResponse = ApiResponse<RegisterTenantResponseData>;

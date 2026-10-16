@@ -4,6 +4,7 @@ import { useAuth } from '@/context/AuthContext';
 import { ROUTES } from '@/config/routes';
 import { Button } from '@/components/ui/Button';
 import { Modal } from '@/components/ui/Modal';
+import { AuthService } from '@/services/auth/authService';
 import {
   ShieldCheck,
   Plus,
@@ -14,6 +15,12 @@ import {
   ExternalLink,
   Ban,
   CheckCircle2,
+  Copy,
+  Check,
+  User,
+  Sparkles,
+  Building2,
+  Send,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 
@@ -108,39 +115,142 @@ export const SuperAdminDashboard: React.FC = () => {
     },
   ]);
 
-  // Formulario nuevo comercio
+  // Formulario nuevo comercio (SaaS Onboarding Real)
   const [nombreNuevo, setNombreNuevo] = useState('');
+  const [tipoDocNuevo, setTipoDocNuevo] = useState<'RUC' | 'DNI'>('RUC');
   const [rucNuevo, setRucNuevo] = useState('');
   const [telefonoNuevo, setTelefonoNuevo] = useState('');
-  const [planNuevo, setPlanNuevo] = useState('Minimarket Pro');
+  const [correoNuevo, setCorreoNuevo] = useState('');
+  const [direccionNueva, setDireccionNueva] = useState('');
+  const [planIdNuevo, setPlanIdNuevo] = useState<number>(2); // 2: Minimarket Pro
+  const [nombreDuenoNuevo, setNombreDuenoNuevo] = useState('');
+  const [usernameNuevo, setUsernameNuevo] = useState('');
+  const [passwordProvisorio, setPasswordProvisorio] = useState('Almain123*');
+  const [isSubmittingTenant, setIsSubmittingTenant] = useState(false);
 
-  const handleCrearTenant = (e: React.FormEvent) => {
+  // Modal de credenciales generadas
+  const [isSuccessModalOpen, setIsSuccessModalOpen] = useState(false);
+  const [createdTenantData, setCreatedTenantData] = useState<{
+    nombreComercial: string;
+    nombreDueno: string;
+    username: string;
+    passwordProvisorio: string;
+    telefono: string;
+  } | null>(null);
+  const [hasCopied, setHasCopied] = useState(false);
+
+  const generarPasswordAleatoria = () => {
+    const randomSuffix = Math.floor(100 + Math.random() * 900);
+    setPasswordProvisorio(`Almain${randomSuffix}*`);
+  };
+
+  const handleCrearTenant = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!nombreNuevo.trim() || !rucNuevo.trim()) {
-      toast.error('Completa los campos obligatorios');
+    if (!nombreNuevo.trim() || !rucNuevo.trim() || !telefonoNuevo.trim()) {
+      toast.error('Completa los datos del comercio obligatorios');
+      return;
+    }
+    if (!nombreDuenoNuevo.trim() || !usernameNuevo.trim() || !passwordProvisorio.trim()) {
+      toast.error('Completa el usuario y contraseña del administrador');
       return;
     }
 
-    const nuevo: TenantDemoItem = {
-      id: tenants.length + 1,
-      nombreComercial: nombreNuevo.trim(),
-      razonSocial: nombreNuevo.trim() + ' S.A.C.',
-      ruc: rucNuevo.trim(),
-      plan: planNuevo,
-      precioMensual: planNuevo === 'Plan Cadena' ? 149 : planNuevo === 'Minimarket Pro' ? 89 : 49,
-      estado: 'ACTIVO',
-      diasRestantes: 30,
-      telefono: telefonoNuevo.trim() || '999888777',
-      correo: 'contacto@' + nombreNuevo.toLowerCase().replace(/\s+/g, '') + '.com',
-      totalVentasMes: 0,
-    };
+    if (passwordProvisorio.length < 6) {
+      toast.error('La contraseña provisional debe tener al menos 6 caracteres');
+      return;
+    }
 
-    setTenants([nuevo, ...tenants]);
-    toast.success(`¡Negocio "${nuevo.nombreComercial}" registrado en la plataforma!`);
-    setIsNewTenantModal(false);
-    setNombreNuevo('');
-    setRucNuevo('');
-    setTelefonoNuevo('');
+    const planNombre = planIdNuevo === 3 ? 'Plan Cadena' : planIdNuevo === 2 ? 'Minimarket Pro' : 'Plan Básico';
+    const precioPlan = planIdNuevo === 3 ? 149 : planIdNuevo === 2 ? 89 : 49;
+
+    setIsSubmittingTenant(true);
+    try {
+      const response = await AuthService.registerTenant({
+        idPais: 1,
+        nombreComercial: nombreNuevo.trim(),
+        razonSocial: `${nombreNuevo.trim()} ${tipoDocNuevo === 'RUC' ? 'S.A.C.' : ''}`,
+        tipoDocumento: tipoDocNuevo,
+        numeroDocumento: rucNuevo.trim(),
+        telefonoWhatsApp: telefonoNuevo.trim(),
+        correoContacto: correoNuevo.trim() || undefined,
+        direccion: direccionNueva.trim() || undefined,
+        idPlanSaaS: planIdNuevo,
+        diasDuracionPlan: 30,
+        montoPagado: precioPlan,
+        metodoPago: 'Yape',
+        nombreCompletoUsuario: nombreDuenoNuevo.trim(),
+        username: usernameNuevo.trim().toLowerCase(),
+        passwordProvisorio: passwordProvisorio.trim(),
+      });
+
+      const nuevo: TenantDemoItem = {
+        id: response.data?.tenantId || (tenants.length + 1),
+        nombreComercial: nombreNuevo.trim(),
+        razonSocial: `${nombreNuevo.trim()} S.A.C.`,
+        ruc: rucNuevo.trim(),
+        plan: planNombre,
+        precioMensual: precioPlan,
+        estado: 'ACTIVO',
+        diasRestantes: 30,
+        telefono: telefonoNuevo.trim(),
+        correo: correoNuevo.trim() || `contacto@${nombreNuevo.toLowerCase().replace(/\s+/g, '')}.pe`,
+        totalVentasMes: 0,
+      };
+
+      setTenants([nuevo, ...tenants]);
+      setIsNewTenantModal(false);
+
+      // Guardar datos para el modal de entrega de cuenta y WhatsApp
+      setCreatedTenantData({
+        nombreComercial: nombreNuevo.trim(),
+        nombreDueno: nombreDuenoNuevo.trim(),
+        username: usernameNuevo.trim().toLowerCase(),
+        passwordProvisorio: passwordProvisorio.trim(),
+        telefono: telefonoNuevo.trim(),
+      });
+      setIsSuccessModalOpen(true);
+      toast.success(`¡Negocio "${nuevo.nombreComercial}" registrado en la base de datos!`);
+
+      // Limpiar formulario
+      setNombreNuevo('');
+      setRucNuevo('');
+      setTelefonoNuevo('');
+      setCorreoNuevo('');
+      setDireccionNueva('');
+      setNombreDuenoNuevo('');
+      setUsernameNuevo('');
+      setPasswordProvisorio('Almain123*');
+    } catch (err: any) {
+      const msg = err?.response?.data?.message || (err instanceof Error ? err.message : 'Error al registrar comercio');
+      toast.error(msg);
+    } finally {
+      setIsSubmittingTenant(false);
+    }
+  };
+
+  const getCredencialesTexto = () => {
+    if (!createdTenantData) return '';
+    const origin = window.location.origin;
+    return `¡Hola ${createdTenantData.nombreDueno}! 🎉\n\nTu negocio *${createdTenantData.nombreComercial}* ya está registrado y activo en *Almain POS*.\n\n🌐 *Enlace de Ingreso:* ${origin}/login\n👤 *Usuario:* ${createdTenantData.username}\n🔑 *Contraseña Provisional:* ${createdTenantData.passwordProvisorio}\n\n🔒 *Importante:* Al ingresar por primera vez, el sistema te solicitará configurar tu propia contraseña personal para mayor seguridad.\n\n¡Muchos éxitos en tus ventas! 🚀`;
+  };
+
+  const handleCopiarCredenciales = async () => {
+    try {
+      await navigator.clipboard.writeText(getCredencialesTexto());
+      setHasCopied(true);
+      toast.success('Credenciales copiadas al portapapeles');
+      setTimeout(() => setHasCopied(false), 2500);
+    } catch {
+      toast.error('No se pudo copiar');
+    }
+  };
+
+  const handleCompartirWhatsApp = () => {
+    if (!createdTenantData) return;
+    const cleanPhone = createdTenantData.telefono.replace(/\D/g, '');
+    const phoneWithCountry = cleanPhone.length === 9 ? `51${cleanPhone}` : cleanPhone;
+    const texto = encodeURIComponent(getCredencialesTexto());
+    window.open(`https://wa.me/${phoneWithCountry}?text=${texto}`, '_blank');
   };
 
   const handleToggleEstado = (id: number) => {
@@ -441,69 +551,286 @@ export const SuperAdminDashboard: React.FC = () => {
         onClose={() => setIsNewTenantModal(false)}
         title="Registrar Nuevo Negocio / Tenant"
         position="center"
+        maxWidth="max-w-lg"
       >
-        <form onSubmit={handleCrearTenant} className="space-y-3 text-slate-800">
-          <div>
-            <label className="text-xs font-bold text-slate-700 uppercase">Nombre Comercial</label>
-            <input
-              type="text"
-              placeholder="ej: Minimarket Los Laureles"
-              value={nombreNuevo}
-              onChange={(e) => setNombreNuevo(e.target.value)}
-              className="w-full h-11 bg-slate-50 border border-slate-200 rounded-xl px-3 text-sm mt-1 outline-none font-semibold"
-              required
-            />
-          </div>
+        <form onSubmit={handleCrearTenant} className="space-y-4 text-slate-800">
+          {/* Sección 1: Datos del Comercio */}
+          <div className="bg-slate-50 border border-slate-200/80 rounded-2xl p-3.5 space-y-3">
+            <div className="flex items-center gap-2 text-indigo-700">
+              <Building2 className="w-4 h-4 stroke-[2.5]" />
+              <h4 className="text-xs font-black uppercase tracking-wider">1. Datos del Comercio</h4>
+            </div>
 
-          <div className="grid grid-cols-2 gap-2">
             <div>
-              <label className="text-xs font-bold text-slate-700 uppercase">RUC o DNI</label>
+              <label className="text-[11px] font-bold text-slate-700 uppercase">Nombre Comercial *</label>
               <input
                 type="text"
-                placeholder="20601234567"
-                value={rucNuevo}
-                onChange={(e) => setRucNuevo(e.target.value)}
-                className="w-full h-11 bg-slate-50 border border-slate-200 rounded-xl px-3 text-sm mt-1 outline-none font-semibold"
+                placeholder="ej: Minimarket Los Laureles"
+                value={nombreNuevo}
+                onChange={(e) => setNombreNuevo(e.target.value)}
+                className="w-full h-10 bg-white border border-slate-200 rounded-xl px-3 text-sm mt-1 outline-none font-semibold focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500"
                 required
               />
             </div>
-            <div>
-              <label className="text-xs font-bold text-slate-700 uppercase">Teléfono WhatsApp</label>
-              <input
-                type="tel"
-                placeholder="987654321"
-                value={telefonoNuevo}
-                onChange={(e) => setTelefonoNuevo(e.target.value)}
-                className="w-full h-11 bg-slate-50 border border-slate-200 rounded-xl px-3 text-sm mt-1 outline-none font-semibold"
-              />
+
+            <div className="grid grid-cols-3 gap-2">
+              <div>
+                <label className="text-[11px] font-bold text-slate-700 uppercase">Tipo Doc</label>
+                <select
+                  value={tipoDocNuevo}
+                  onChange={(e) => setTipoDocNuevo(e.target.value as 'RUC' | 'DNI')}
+                  className="w-full h-10 bg-white border border-slate-200 rounded-xl px-2 text-xs mt-1 outline-none font-bold"
+                >
+                  <option value="RUC">RUC</option>
+                  <option value="DNI">DNI</option>
+                </select>
+              </div>
+              <div className="col-span-2">
+                <label className="text-[11px] font-bold text-slate-700 uppercase">N° Documento *</label>
+                <input
+                  type="text"
+                  placeholder={tipoDocNuevo === 'RUC' ? '20601234567' : '71234567'}
+                  value={rucNuevo}
+                  onChange={(e) => setRucNuevo(e.target.value)}
+                  className="w-full h-10 bg-white border border-slate-200 rounded-xl px-3 text-sm mt-1 outline-none font-semibold focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500"
+                  required
+                />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-2">
+              <div>
+                <label className="text-[11px] font-bold text-slate-700 uppercase">WhatsApp / Celular *</label>
+                <input
+                  type="tel"
+                  placeholder="987654321"
+                  value={telefonoNuevo}
+                  onChange={(e) => setTelefonoNuevo(e.target.value)}
+                  className="w-full h-10 bg-white border border-slate-200 rounded-xl px-3 text-sm mt-1 outline-none font-semibold focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500"
+                  required
+                />
+              </div>
+              <div>
+                <label className="text-[11px] font-bold text-slate-700 uppercase">Plan SaaS</label>
+                <select
+                  value={planIdNuevo}
+                  onChange={(e) => setPlanIdNuevo(Number(e.target.value))}
+                  className="w-full h-10 bg-white border border-slate-200 rounded-xl px-2 text-xs mt-1 outline-none font-bold focus:border-indigo-500"
+                >
+                  <option value={1}>Plan Básico (S/ 49 / mes)</option>
+                  <option value={2}>Minimarket Pro (S/ 89 / mes)</option>
+                  <option value={3}>Plan Cadena (S/ 149 / mes)</option>
+                </select>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-2">
+              <div>
+                <label className="text-[11px] font-bold text-slate-600 uppercase">Correo (Opcional)</label>
+                <input
+                  type="email"
+                  placeholder="contacto@negocio.pe"
+                  value={correoNuevo}
+                  onChange={(e) => setCorreoNuevo(e.target.value)}
+                  className="w-full h-9 bg-white border border-slate-200 rounded-xl px-2.5 text-xs mt-1 outline-none"
+                />
+              </div>
+              <div>
+                <label className="text-[11px] font-bold text-slate-600 uppercase">Dirección (Opcional)</label>
+                <input
+                  type="text"
+                  placeholder="Av. Principal 123"
+                  value={direccionNueva}
+                  onChange={(e) => setDireccionNueva(e.target.value)}
+                  className="w-full h-9 bg-white border border-slate-200 rounded-xl px-2.5 text-xs mt-1 outline-none"
+                />
+              </div>
             </div>
           </div>
 
-          <div>
-            <label className="text-xs font-bold text-slate-700 uppercase">Plan SaaS</label>
-            <select
-              value={planNuevo}
-              onChange={(e) => setPlanNuevo(e.target.value)}
-              className="w-full h-11 bg-slate-50 border border-slate-200 rounded-xl px-3 text-xs mt-1 outline-none font-bold"
-            >
-              <option value="Plan Básico">Plan Básico (S/ 49 / mes)</option>
-              <option value="Minimarket Pro">Minimarket Pro (S/ 89 / mes)</option>
-              <option value="Plan Cadena">Plan Cadena (S/ 149 / mes)</option>
-            </select>
+          {/* Sección 2: Cuenta del Dueño / Administrador */}
+          <div className="bg-amber-50/70 border border-amber-200 rounded-2xl p-3.5 space-y-3">
+            <div className="flex items-center gap-2 text-amber-800">
+              <User className="w-4 h-4 stroke-[2.5]" />
+              <h4 className="text-xs font-black uppercase tracking-wider">2. Cuenta para el Dueño</h4>
+            </div>
+
+            <div>
+              <label className="text-[11px] font-bold text-slate-700 uppercase">Nombre Completo del Dueño *</label>
+              <input
+                type="text"
+                placeholder="ej: Carlos Mendoza Rivera"
+                value={nombreDuenoNuevo}
+                onChange={(e) => {
+                  setNombreDuenoNuevo(e.target.value);
+                  if (!usernameNuevo) {
+                    const firstWord = e.target.value.trim().split(' ')[0] || '';
+                    if (firstWord.length >= 3) {
+                      setUsernameNuevo(firstWord.toLowerCase());
+                    }
+                  }
+                }}
+                className="w-full h-10 bg-white border border-slate-200 rounded-xl px-3 text-sm mt-1 outline-none font-semibold focus:border-amber-500 focus:ring-1 focus:ring-amber-500"
+                required
+              />
+            </div>
+
+            <div className="grid grid-cols-2 gap-2">
+              <div>
+                <label className="text-[11px] font-bold text-slate-700 uppercase">Usuario de Acceso *</label>
+                <input
+                  type="text"
+                  placeholder="ej: donpepe"
+                  value={usernameNuevo}
+                  onChange={(e) => setUsernameNuevo(e.target.value.toLowerCase().replace(/\s+/g, ''))}
+                  className="w-full h-10 bg-white border border-slate-200 rounded-xl px-3 text-sm mt-1 outline-none font-mono font-bold focus:border-amber-500 focus:ring-1 focus:ring-amber-500"
+                  required
+                />
+              </div>
+              <div>
+                <div className="flex items-center justify-between">
+                  <label className="text-[11px] font-bold text-slate-700 uppercase">Clave Provisional *</label>
+                  <button
+                    type="button"
+                    onClick={generarPasswordAleatoria}
+                    className="text-[10px] text-amber-700 font-bold hover:underline inline-flex items-center gap-0.5 cursor-pointer"
+                  >
+                    <Sparkles className="w-3 h-3" /> Generar
+                  </button>
+                </div>
+                <input
+                  type="text"
+                  value={passwordProvisorio}
+                  onChange={(e) => setPasswordProvisorio(e.target.value)}
+                  className="w-full h-10 bg-white border border-slate-200 rounded-xl px-3 text-sm mt-1 outline-none font-mono font-bold focus:border-amber-500 focus:ring-1 focus:ring-amber-500"
+                  required
+                />
+              </div>
+            </div>
+
+            <p className="text-[11px] text-amber-900/80 leading-relaxed bg-amber-100/60 p-2 rounded-xl border border-amber-200/60">
+              💡 <strong>Aviso de seguridad:</strong> El sistema detectará que este usuario es nuevo y le obligará a crear su contraseña personal definitiva nada más iniciar sesión.
+            </p>
           </div>
 
-          <div className="pt-2">
+          <div className="pt-1">
             <Button
               type="submit"
               variant="primary"
               size="lg"
               fullWidth
-              className="bg-indigo-600 hover:bg-indigo-700 shadow-indigo-600/30"
+              isLoading={isSubmittingTenant}
+              className="bg-indigo-600 hover:bg-indigo-700 shadow-indigo-600/30 text-sm font-extrabold"
             >
-              REGISTRAR NEGOCIO
+              REGISTRAR NEGOCIO Y CREAR CUENTA
             </Button>
           </div>
         </form>
+      </Modal>
+
+      {/* Modal Éxito y Compartir Credenciales por WhatsApp */}
+      <Modal
+        isOpen={isSuccessModalOpen}
+        onClose={() => setIsSuccessModalOpen(false)}
+        title="¡Comercio y Cuenta Creados!"
+        position="center"
+        maxWidth="max-w-md"
+      >
+        <div className="space-y-4 text-slate-800 p-1">
+          <div className="text-center">
+            <div className="w-14 h-14 bg-emerald-100 text-emerald-600 rounded-full flex items-center justify-center mx-auto mb-2 shadow-inner">
+              <CheckCircle2 className="w-8 h-8 stroke-[2.5]" />
+            </div>
+            <h3 className="text-base font-extrabold text-slate-900">
+              {createdTenantData?.nombreComercial}
+            </h3>
+            <p className="text-xs text-slate-500 mt-0.5">
+              Registrado exitosamente en la plataforma Almain POS.
+            </p>
+          </div>
+
+          {/* Tarjeta de Credenciales */}
+          <div className="bg-slate-900 text-slate-100 rounded-2xl p-4 space-y-2.5 font-mono text-xs shadow-lg border border-slate-800">
+            <div className="flex justify-between items-center text-slate-400 pb-2 border-b border-slate-800 text-[11px] font-sans">
+              <span>Datos de Acceso del Dueño</span>
+              <span className="px-2 py-0.5 rounded-md bg-amber-500/20 text-amber-300 font-bold text-[10px]">
+                Primer Login Obligatorio
+              </span>
+            </div>
+
+            <div className="space-y-1.5 pt-1">
+              <div className="flex items-center justify-between">
+                <span className="text-slate-400 font-sans">Dueño:</span>
+                <span className="text-white font-bold">{createdTenantData?.nombreDueno}</span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-slate-400 font-sans">Usuario:</span>
+                <span className="text-emerald-400 font-bold bg-emerald-950/60 px-2 py-0.5 rounded border border-emerald-800/40">
+                  {createdTenantData?.username}
+                </span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-slate-400 font-sans">Contraseña:</span>
+                <span className="text-amber-300 font-bold bg-amber-950/60 px-2 py-0.5 rounded border border-amber-800/40">
+                  {createdTenantData?.passwordProvisorio}
+                </span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-slate-400 font-sans">Enlace POS:</span>
+                <span className="text-indigo-300 underline truncate max-w-[200px]">
+                  {window.location.origin}/login
+                </span>
+              </div>
+            </div>
+          </div>
+
+          {/* Botones de Compartir */}
+          <div className="space-y-2 pt-1">
+            <Button
+              type="button"
+              variant="primary"
+              size="lg"
+              fullWidth
+              onClick={handleCompartirWhatsApp}
+              className="bg-emerald-600 hover:bg-emerald-700 shadow-emerald-600/30 text-white font-bold flex items-center justify-center gap-2"
+            >
+              <Send className="w-4 h-4" />
+              <span>ENVIAR POR WHATSAPP AL CLIENTE</span>
+            </Button>
+
+            <Button
+              type="button"
+              variant="secondary"
+              size="md"
+              fullWidth
+              onClick={handleCopiarCredenciales}
+              className="border border-slate-200 text-slate-700 font-bold flex items-center justify-center gap-2"
+            >
+              {hasCopied ? (
+                <>
+                  <Check className="w-4 h-4 text-emerald-600" />
+                  <span>¡Copiado al Portapapeles!</span>
+                </>
+              ) : (
+                <>
+                  <Copy className="w-4 h-4" />
+                  <span>Copiar Credenciales</span>
+                </>
+              )}
+            </Button>
+
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              fullWidth
+              onClick={() => setIsSuccessModalOpen(false)}
+              className="text-slate-400 hover:text-slate-600 text-xs mt-1"
+            >
+              Cerrar
+            </Button>
+          </div>
+        </div>
       </Modal>
     </div>
   );
