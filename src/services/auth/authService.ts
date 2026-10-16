@@ -39,7 +39,7 @@ export const AuthService = {
   getUserProfile: () => AuthStorage.getUserProfile(),
 
   cambiarPassword: async (data: { passwordActual?: string; nuevoPassword: string; confirmarPassword: string }) => {
-    const response = await api.post<{ isSuccess: boolean; message: string }>('/auth/cambiar-password', {
+    const response = await api.post<{ isSuccess: boolean; message: string }>('/auth/change-password', {
       passwordActual: data.passwordActual || '',
       nuevoPassword: data.nuevoPassword,
       confirmarPassword: data.confirmarPassword,

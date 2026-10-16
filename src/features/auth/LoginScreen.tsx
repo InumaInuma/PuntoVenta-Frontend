@@ -115,9 +115,15 @@ export const LoginScreen: React.FC = () => {
       return;
     }
 
+    if (nuevoPassword.trim() === password.trim()) {
+      toast.error('Por seguridad, la nueva contraseña debe ser diferente a tu contraseña actual de acceso');
+      return;
+    }
+
     setIsSubmittingPassword(true);
     try {
       await AuthService.cambiarPassword({
+        passwordActual: password.trim(),
         nuevoPassword: nuevoPassword.trim(),
         confirmarPassword: confirmarPassword.trim(),
       });
@@ -126,10 +132,10 @@ export const LoginScreen: React.FC = () => {
       setIsMustChangeModalOpen(false);
 
       if (pendingLoginData) {
-        completeLogin(pendingLoginData);
+        completeLogin({ ...pendingLoginData, debeCambiarPassword: false });
       }
-    } catch (err: unknown) {
-      const errorMsg = err instanceof Error ? err.message : 'Error al establecer la contraseña';
+    } catch (err: any) {
+      const errorMsg = err?.response?.data?.message || (err instanceof Error ? err.message : 'Error al establecer la contraseña');
       toast.error(errorMsg);
     } finally {
       setIsSubmittingPassword(false);
@@ -213,7 +219,7 @@ export const LoginScreen: React.FC = () => {
               </h4>
               <p className="text-[11px] text-amber-800/90 mt-0.5 leading-relaxed">
                 Por seguridad en tu primer acceso, debes definir tu propia contraseña personal. 
-                Recuérdala bien para tus futuros inicios de sesión.
+                Debe ser de al menos 6 caracteres y diferente a la clave provisional que usaste para entrar.
               </p>
             </div>
           </div>
