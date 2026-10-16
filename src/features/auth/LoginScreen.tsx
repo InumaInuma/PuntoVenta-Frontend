@@ -3,7 +3,6 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/context/AuthContext';
 import { AuthService } from '@/services/auth/authService';
 import type { LoginData } from '@/services/auth/authTypes';
-import { PosStorage } from '@/services/storage';
 import { ROUTES } from '@/config/routes';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
@@ -26,12 +25,11 @@ export const LoginScreen: React.FC = () => {
   const [confirmarPassword, setConfirmarPassword] = useState('');
   const [isSubmittingPassword, setIsSubmittingPassword] = useState(false);
 
-  // Cargar último usuario recordado en este smartphone/dispositivo
+  // Asegurar que el campo de usuario inicie siempre limpio
   useEffect(() => {
-    const last = PosStorage.getLastCashier();
-    if (last?.login) {
-      setUsuario(last.login);
-    }
+    try {
+      localStorage.removeItem('almain_pos_last_cashier');
+    } catch {}
   }, []);
 
   const completeLogin = (data: LoginData) => {
@@ -76,7 +74,6 @@ export const LoginScreen: React.FC = () => {
       });
 
       const data = response.data;
-      PosStorage.setLastCashier({ login: usuario.trim() });
 
       // Si el usuario es nuevo y el sistema requiere que establezca su nueva contraseña
       if (data.debeCambiarPassword) {
@@ -162,7 +159,7 @@ export const LoginScreen: React.FC = () => {
         <div className="bg-white rounded-[28px] p-6 shadow-xl shadow-slate-200/60 border border-slate-200/80">
           <form onSubmit={handleSubmit} className="space-y-4">
             <Input
-              label="Usuario o Correo"
+              label="Usuario"
               type="text"
               placeholder="ej: donpepe, cajero1 o admin"
               icon={<User className="w-5 h-5 text-slate-400" />}
