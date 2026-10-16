@@ -38,6 +38,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }, []);
 
   const verificarTurnoActivo = useCallback(async (): Promise<TurnoCaja | null> => {
+    const isSuperAdmin = (user?.rol || '').toUpperCase() === 'SUPERADMIN';
+    if (!user || isSuperAdmin || !user.tenantId) {
+      setTurnoActivo(null);
+      return null;
+    }
+
     try {
       const turno = await cajasService.getTurnoActivo();
       setTurnoActivo(turno);
@@ -46,11 +52,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setTurnoActivo(null);
       return null;
     }
-  }, []);
+  }, [user]);
 
-  // Verificar turno cuando el usuario esté autenticado
+  // Verificar turno cuando el usuario pertenezca a un comercio y no sea SuperAdmin
   useEffect(() => {
-    if (user && token) {
+    const isSuperAdmin = (user?.rol || '').toUpperCase() === 'SUPERADMIN';
+    if (user && token && !isSuperAdmin && user.tenantId) {
       verificarTurnoActivo();
     }
   }, [user, token, verificarTurnoActivo]);
