@@ -2,11 +2,13 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/context/AuthContext';
 import { AuthService } from '@/services/auth/authService';
+import type { LoginData } from '@/services/auth/authTypes';
 import { PosStorage } from '@/services/storage';
 import { ROUTES } from '@/config/routes';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
-import { Store, User, Lock, Sparkles, ShieldCheck } from 'lucide-react';
+import { Modal } from '@/components/ui/Modal';
+import { Store, User, Lock, KeyRound, ShieldAlert } from 'lucide-react';
 import toast from 'react-hot-toast';
 
 export const LoginScreen: React.FC = () => {
@@ -17,6 +19,13 @@ export const LoginScreen: React.FC = () => {
   const [password, setPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
 
+  // Estados para forzar cambio de contraseña en primer login
+  const [isMustChangeModalOpen, setIsMustChangeModalOpen] = useState(false);
+  const [pendingLoginData, setPendingLoginData] = useState<LoginData | null>(null);
+  const [nuevoPassword, setNuevoPassword] = useState('');
+  const [confirmarPassword, setConfirmarPassword] = useState('');
+  const [isSubmittingPassword, setIsSubmittingPassword] = useState(false);
+
   // Cargar último usuario recordado en este smartphone/dispositivo
   useEffect(() => {
     const last = PosStorage.getLastCashier();
@@ -24,6 +33,33 @@ export const LoginScreen: React.FC = () => {
       setUsuario(last.login);
     }
   }, []);
+
+  const completeLogin = (data: LoginData) => {
+    login(data.token, {
+      idUsuario: data.idUsuario,
+      tenantId: data.tenantId,
+      username: data.username,
+      nombreCompleto: data.nombreCompleto,
+      rol: data.rol,
+      debeCambiarPassword: false,
+      tenantNombreComercial: data.tenantNombreComercial || (data.rol === 'SuperAdmin' ? 'Super Admin Platform' : 'Almain POS'),
+      monedaSimbolo: data.monedaSimbolo || 'S/',
+      monedaCodigo: data.monedaCodigo || 'PEN',
+      nombre: data.nombreCompleto,
+      nombreEmpresa: data.tenantNombreComercial || (data.rol === 'SuperAdmin' ? 'Super Admin Platform' : 'Almain POS'),
+      idEmpresa: data.tenantId ?? 1,
+      idSucursal: 1,
+    });
+
+    toast.success(`¡Bienvenido, ${data.nombreCompleto}!`);
+
+    const isSuperAdmin = (data.rol || '').toUpperCase() === 'SUPERADMIN';
+    if (isSuperAdmin) {
+      navigate(ROUTES.ADMIN);
+    } else {
+      navigate(ROUTES.POS);
+    }
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -42,31 +78,18 @@ export const LoginScreen: React.FC = () => {
       const data = response.data;
       PosStorage.setLastCashier({ login: usuario.trim() });
 
-      // Actualizar estado del contexto
-      login(data.token, {
-        idUsuario: data.idUsuario,
-        tenantId: data.tenantId,
-        username: data.username,
-        nombreCompleto: data.nombreCompleto,
-        rol: data.rol,
-        debeCambiarPassword: data.debeCambiarPassword,
-        tenantNombreComercial: data.tenantNombreComercial || (data.rol === 'SuperAdmin' ? 'Super Admin Platform' : 'Almain POS'),
-        monedaSimbolo: data.monedaSimbolo || 'S/',
-        monedaCodigo: data.monedaCodigo || 'PEN',
-        nombre: data.nombreCompleto,
-        nombreEmpresa: data.tenantNombreComercial || (data.rol === 'SuperAdmin' ? 'Super Admin Platform' : 'Almain POS'),
-        idEmpresa: data.tenantId ?? 1,
-        idSucursal: 1,
-      });
-
-      toast.success(`¡Bienvenido, ${data.nombreCompleto}!`);
-
-      const isSuperAdmin = (data.rol || '').toUpperCase() === 'SUPERADMIN';
-      if (isSuperAdmin) {
-        navigate(ROUTES.ADMIN);
-      } else {
-        navigate(ROUTES.POS);
+      // Si el usuario es nuevo y el sistema requiere que establezca su nueva contraseña
+      if (data.debeCambiarPassword) {
+        setPendingLoginData(data);
+        setIsMustChangeModalOpen(true);
+        toast('Primer inicio detectado: debes definir tu nueva contraseña personal.', {
+          icon: '🔒',
+          duration: 4500,
+        });
+        return;
       }
+
+      completeLogin(data);
     } catch (err: unknown) {
       const errorMsg = err instanceof Error ? err.message : 'Error al iniciar sesión';
       toast.error(errorMsg);
@@ -75,10 +98,42 @@ export const LoginScreen: React.FC = () => {
     }
   };
 
-  // Botones de autocompletado rápido para pruebas
-  const handleFillCredentials = (userToFill: string, passToFill: string) => {
-    setUsuario(userToFill);
-    setPassword(passToFill);
+  const handleCambiarPasswordPrimerLogin = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!nuevoPassword.trim() || !confirmarPassword.trim()) {
+      toast.error('Completa ambos campos de contraseña');
+      return;
+    }
+
+    if (nuevoPassword.length < 6) {
+      toast.error('La nueva contraseña debe tener al menos 6 caracteres');
+      return;
+    }
+
+    if (nuevoPassword !== confirmarPassword) {
+      toast.error('Las contraseñas no coinciden');
+      return;
+    }
+
+    setIsSubmittingPassword(true);
+    try {
+      await AuthService.cambiarPassword({
+        nuevoPassword: nuevoPassword.trim(),
+        confirmarPassword: confirmarPassword.trim(),
+      });
+
+      toast.success('¡Contraseña configurada con éxito!');
+      setIsMustChangeModalOpen(false);
+
+      if (pendingLoginData) {
+        completeLogin(pendingLoginData);
+      }
+    } catch (err: unknown) {
+      const errorMsg = err instanceof Error ? err.message : 'Error al establecer la contraseña';
+      toast.error(errorMsg);
+    } finally {
+      setIsSubmittingPassword(false);
+    }
   };
 
   return (
@@ -131,31 +186,6 @@ export const LoginScreen: React.FC = () => {
               INGRESAR A LA PLATAFORMA
             </Button>
           </form>
-
-          {/* Quick Demo Credentials */}
-          <div className="mt-5 pt-4 border-t border-slate-100 flex flex-col gap-2">
-            <span className="text-[10px] font-black text-slate-400 uppercase tracking-wider text-center">
-              Accesos Rápidos de Prueba
-            </span>
-            <div className="grid grid-cols-2 gap-1.5">
-              <button
-                type="button"
-                onClick={() => handleFillCredentials('donpepe', 'Admin123*')}
-                className="inline-flex items-center justify-center gap-1.5 text-[11px] font-bold text-red-600 hover:text-red-700 bg-red-50 hover:bg-red-100/80 p-2 rounded-xl transition-all cursor-pointer"
-              >
-                <Sparkles className="w-3.5 h-3.5" />
-                Dueño (Don Pepe)
-              </button>
-              <button
-                type="button"
-                onClick={() => handleFillCredentials('superadmin', 'Admin123*')}
-                className="inline-flex items-center justify-center gap-1.5 text-[11px] font-bold text-indigo-600 hover:text-indigo-700 bg-indigo-50 hover:bg-indigo-100/80 p-2 rounded-xl transition-all cursor-pointer"
-              >
-                <ShieldCheck className="w-3.5 h-3.5" />
-                Super Admin
-              </button>
-            </div>
-          </div>
         </div>
 
         {/* Footer */}
@@ -163,6 +193,65 @@ export const LoginScreen: React.FC = () => {
           Almain Retail SaaS • Multi-tenant Automático
         </p>
       </div>
+
+      {/* Modal Primer Login - Establecer Nueva Contraseña */}
+      <Modal
+        isOpen={isMustChangeModalOpen}
+        onClose={() => {}} // Bloqueado para obligar a cambiarla
+        title="Crear Nueva Contraseña"
+        position="center"
+        maxWidth="max-w-md"
+      >
+        <div className="p-1 space-y-4 text-slate-800">
+          <div className="bg-amber-50 border border-amber-200/80 rounded-2xl p-3.5 flex items-start gap-3">
+            <div className="w-8 h-8 rounded-xl bg-amber-500/20 text-amber-600 flex items-center justify-center shrink-0 mt-0.5">
+              <ShieldAlert className="w-4.5 h-4.5" />
+            </div>
+            <div>
+              <h4 className="text-xs font-bold text-amber-900">
+                Bienvenido, {pendingLoginData?.nombreCompleto || 'Usuario'}
+              </h4>
+              <p className="text-[11px] text-amber-800/90 mt-0.5 leading-relaxed">
+                Por seguridad en tu primer acceso, debes definir tu propia contraseña personal. 
+                Recuérdala bien para tus futuros inicios de sesión.
+              </p>
+            </div>
+          </div>
+
+          <form onSubmit={handleCambiarPasswordPrimerLogin} className="space-y-3.5">
+            <Input
+              label="Nueva Contraseña"
+              type="password"
+              placeholder="Mínimo 6 caracteres"
+              icon={<KeyRound className="w-5 h-5 text-slate-400" />}
+              value={nuevoPassword}
+              onChange={(e) => setNuevoPassword(e.target.value)}
+              required
+            />
+
+            <Input
+              label="Confirmar Nueva Contraseña"
+              type="password"
+              placeholder="Repite la nueva contraseña"
+              icon={<Lock className="w-5 h-5 text-slate-400" />}
+              value={confirmarPassword}
+              onChange={(e) => setConfirmarPassword(e.target.value)}
+              required
+            />
+
+            <Button
+              type="submit"
+              variant="primary"
+              size="lg"
+              fullWidth
+              isLoading={isSubmittingPassword}
+              className="mt-2 bg-red-600 hover:bg-red-700 shadow-red-600/30"
+            >
+              ESTABLECER CONTRASEÑA Y ENTRAR
+            </Button>
+          </form>
+        </div>
+      </Modal>
     </div>
   );
 };
