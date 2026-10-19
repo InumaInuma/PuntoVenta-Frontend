@@ -16,6 +16,7 @@ import {
   Store,
   ShieldCheck,
 } from 'lucide-react';
+import { InstallPwaButton } from '@/components/common/InstallPwaButton';
 
 export const DesktopSidebar: React.FC = () => {
   const navigate = useNavigate();
@@ -70,7 +71,7 @@ export const DesktopSidebar: React.FC = () => {
           </div>
           <div className="min-w-0 flex-1">
             <h1 className="text-sm font-extrabold text-white truncate tracking-tight">
-              {user?.nombreEmpresa || 'Bodega Don Pepe'}
+              {user?.nombreEmpresa || 'Mi Comercio'}
             </h1>
             <p className="text-[11px] font-semibold text-zinc-400 truncate">
               {user?.nombreSucursal || 'Sucursal Principal'}
@@ -139,6 +140,11 @@ export const DesktopSidebar: React.FC = () => {
           );
         })}
       </nav>
+
+      {/* PWA Download Banner */}
+      <div className="px-3 py-2 border-t border-zinc-800/60">
+        <InstallPwaButton variant="sidebar" />
+      </div>
 
       {/* 4. Footer: Perfil del Cajero / Admin + Salir */}
       <div className="p-3 border-t border-zinc-800/80 bg-zinc-950/50 flex items-center justify-between gap-2">

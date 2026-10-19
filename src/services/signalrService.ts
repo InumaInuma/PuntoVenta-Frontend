@@ -34,6 +34,14 @@ export interface CotizacionConvertidaNotificacion {
   fechaConversion: string;
 }
 
+export interface TenantEstadoCambiadoNotificacion {
+  tenantId: number;
+  idEstadoTenant: number;
+  estadoCodigo: string;
+  estadoNombre: string;
+  mensaje: string;
+}
+
 class SignalRService {
   private connection: HubConnection | null = null;
   private startingPromise: Promise<HubConnection | null> | null = null;
@@ -102,6 +110,7 @@ class SignalRService {
       'VentaAnulada',
       'CotizacionCreada',
       'CotizacionConvertidaAVenta',
+      'TenantEstadoCambiado',
     ];
 
     events.forEach((evt) => {
@@ -161,6 +170,10 @@ class SignalRService {
 
   public onCotizacionConvertida(callback: (data: CotizacionConvertidaNotificacion) => void): () => void {
     return this.on('CotizacionConvertidaAVenta', callback);
+  }
+
+  public onTenantEstadoCambiado(callback: (data: TenantEstadoCambiadoNotificacion) => void): () => void {
+    return this.on('TenantEstadoCambiado', callback);
   }
 }
 

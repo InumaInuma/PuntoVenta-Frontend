@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '@/context/AuthContext';
 import { AuthService } from '@/services/auth/authService';
 import type { LoginData } from '@/services/auth/authTypes';
@@ -7,16 +7,20 @@ import { ROUTES } from '@/config/routes';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Modal } from '@/components/ui/Modal';
-import { Store, User, Lock, KeyRound, ShieldAlert } from 'lucide-react';
+import { User, Lock, KeyRound, ShieldAlert } from 'lucide-react';
+import { InstallPwaButton } from '@/components/common/InstallPwaButton';
 import toast from 'react-hot-toast';
 
 export const LoginScreen: React.FC = () => {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const { login } = useAuth();
 
   const [usuario, setUsuario] = useState('');
   const [password, setPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [loginError, setLoginError] = useState<string | null>(null);
+  const [hasAutoLoadedCredentials, setHasAutoLoadedCredentials] = useState(false);
 
   // Estados para forzar cambio de contraseña en primer login
   const [isMustChangeModalOpen, setIsMustChangeModalOpen] = useState(false);
@@ -25,12 +29,25 @@ export const LoginScreen: React.FC = () => {
   const [confirmarPassword, setConfirmarPassword] = useState('');
   const [isSubmittingPassword, setIsSubmittingPassword] = useState(false);
 
-  // Asegurar que el campo de usuario inicie siempre limpio
+  // Cargar credenciales desde URL si se enviaron por WhatsApp (ej: ?u=panaderiajonas&p=Almain123*)
   useEffect(() => {
     try {
       localStorage.removeItem('almain_pos_last_cashier');
-    } catch {}
-  }, []);
+    } catch { }
+
+    const urlUser = searchParams.get('u') || searchParams.get('usuario') || searchParams.get('user');
+    const urlPass = searchParams.get('p') || searchParams.get('password') || searchParams.get('pass');
+
+    if (urlUser) {
+      setUsuario(urlUser);
+    }
+    if (urlPass) {
+      setPassword(urlPass);
+    }
+    if (urlUser || urlPass) {
+      setHasAutoLoadedCredentials(true);
+    }
+  }, [searchParams]);
 
   const completeLogin = (data: LoginData) => {
     login(data.token, {
@@ -66,6 +83,7 @@ export const LoginScreen: React.FC = () => {
       return;
     }
 
+    setLoginError(null);
     setIsLoading(true);
     try {
       const response = await AuthService.login({
@@ -87,9 +105,12 @@ export const LoginScreen: React.FC = () => {
       }
 
       completeLogin(data);
-    } catch (err: unknown) {
-      const errorMsg = err instanceof Error ? err.message : 'Error al iniciar sesión';
-      toast.error(errorMsg);
+    } catch (err: any) {
+      const errorMsg =
+        err?.response?.data?.message ||
+        (err instanceof Error ? err.message : 'Usuario o contraseña incorrectos.');
+      setLoginError(errorMsg);
+      toast.error(errorMsg, { id: 'login-error', duration: 4000 });
     } finally {
       setIsLoading(false);
     }
@@ -139,32 +160,77 @@ export const LoginScreen: React.FC = () => {
     }
   };
 
+  const handleCloseMustChangeModal = () => {
+    setIsMustChangeModalOpen(false);
+    setPendingLoginData(null);
+    setNuevoPassword('');
+    setConfirmarPassword('');
+    setUsuario('');
+    setPassword('');
+    setLoginError(null);
+    setHasAutoLoadedCredentials(false);
+    try {
+      if (window.location.search) {
+        window.history.replaceState({}, '', window.location.pathname);
+      }
+    } catch { }
+  };
+
   return (
     <div className="min-h-[100dvh] flex flex-col justify-center items-center p-4 bg-slate-100 safe-top safe-bottom">
       <div className="w-full max-w-sm">
         {/* Brand Header */}
-        <div className="text-center mb-6">
-          <div className="inline-flex items-center justify-center w-16 h-16 rounded-3xl bg-red-500 text-white shadow-xl shadow-red-500/35 mb-3">
-            <Store className="w-8 h-8 stroke-[2.2]" />
+        <div className="text-center mb-5">
+          <div className="inline-flex items-center justify-center mb-2.5">
+            <img
+              src="/icons/icon-192x192.png"
+              alt="Almain POS"
+              className="w-18 h-18 rounded-3xl shadow-lg shadow-slate-300/60 border-2 border-white object-cover"
+            />
           </div>
           <h1 className="text-2xl font-black text-slate-800 tracking-tight">
             Almain POS
           </h1>
-          <p className="text-xs font-semibold text-slate-500 mt-1">
+          <p className="text-xs font-semibold text-slate-500 mt-0.5">
             Punto de Venta Móvil & Control de Negocio
           </p>
+          <div className="mt-3 flex justify-center">
+            <InstallPwaButton variant="login" />
+          </div>
         </div>
 
         {/* Login Card */}
         <div className="bg-white rounded-[28px] p-6 shadow-xl shadow-slate-200/60 border border-slate-200/80">
+          {hasAutoLoadedCredentials && (
+            <div className="mb-4 bg-emerald-50 border border-emerald-200 rounded-2xl p-3 text-xs text-emerald-800 flex items-center gap-2">
+              <span className="text-base shrink-0">✨</span>
+              <p className="leading-tight">
+                Tus credenciales se han cargado automáticamente. Haz clic en <strong>"INGRESAR A LA PLATAFORMA"</strong>.
+              </p>
+            </div>
+          )}
+
+          {loginError && (
+            <div className="mb-4 bg-rose-50 border border-rose-200 rounded-2xl p-3 text-xs text-rose-800 flex items-start gap-2.5 shadow-xs">
+              <ShieldAlert className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
+              <div>
+                <p className="font-bold">Acceso Denegado</p>
+                <p className="text-[11px] text-rose-700 leading-tight mt-0.5">{loginError}</p>
+              </div>
+            </div>
+          )}
+
           <form onSubmit={handleSubmit} className="space-y-4">
             <Input
               label="Usuario"
               type="text"
-              placeholder="ej: donpepe, cajero1 o admin"
+              placeholder="Usuario"
               icon={<User className="w-5 h-5 text-slate-400" />}
               value={usuario}
-              onChange={(e) => setUsuario(e.target.value)}
+              onChange={(e) => {
+                setUsuario(e.target.value);
+                if (loginError) setLoginError(null);
+              }}
               required
             />
 
@@ -174,7 +240,10 @@ export const LoginScreen: React.FC = () => {
               placeholder="••••••••"
               icon={<Lock className="w-5 h-5 text-slate-400" />}
               value={password}
-              onChange={(e) => setPassword(e.target.value)}
+              onChange={(e) => {
+                setPassword(e.target.value);
+                if (loginError) setLoginError(null);
+              }}
               required
             />
 
@@ -200,7 +269,7 @@ export const LoginScreen: React.FC = () => {
       {/* Modal Primer Login - Establecer Nueva Contraseña */}
       <Modal
         isOpen={isMustChangeModalOpen}
-        onClose={() => {}} // Bloqueado para obligar a cambiarla
+        onClose={handleCloseMustChangeModal}
         title="Crear Nueva Contraseña"
         position="center"
         maxWidth="max-w-md"
@@ -215,7 +284,7 @@ export const LoginScreen: React.FC = () => {
                 Bienvenido, {pendingLoginData?.nombreCompleto || 'Usuario'}
               </h4>
               <p className="text-[11px] text-amber-800/90 mt-0.5 leading-relaxed">
-                Por seguridad en tu primer acceso, debes definir tu propia contraseña personal. 
+                Por seguridad en tu primer acceso, debes definir tu propia contraseña personal.
                 Debe ser de al menos 6 caracteres y diferente a la clave provisional que usaste para entrar.
               </p>
             </div>
@@ -252,6 +321,14 @@ export const LoginScreen: React.FC = () => {
             >
               ESTABLECER CONTRASEÑA Y ENTRAR
             </Button>
+
+            <button
+              type="button"
+              onClick={handleCloseMustChangeModal}
+              className="w-full h-8 text-xs font-semibold text-slate-400 hover:text-slate-600 transition-colors cursor-pointer"
+            >
+              Cancelar
+            </button>
           </form>
         </div>
       </Modal>

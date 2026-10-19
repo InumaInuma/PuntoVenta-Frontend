@@ -1,6 +1,7 @@
 import React from 'react';
 import { useAuth } from '@/context/AuthContext';
 import { Store } from 'lucide-react';
+import { InstallPwaButton } from '@/components/common/InstallPwaButton';
 
 interface TopHeaderProps {
   onOpenDrawer?: () => void;
@@ -29,7 +30,7 @@ export const TopHeader: React.FC<TopHeaderProps> = ({ onOpenDrawer }) => {
         <div className="flex flex-col">
           <div className="flex items-center gap-1.5">
             <span className="text-sm font-extrabold text-slate-800 tracking-tight leading-none">
-              {user?.nombreEmpresa || 'Bodega Don Pepe'}
+              {user?.nombreEmpresa || 'Mi Comercio'}
             </span>
             <span className="flex h-2 w-2 relative">
               <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
@@ -44,8 +45,10 @@ export const TopHeader: React.FC<TopHeaderProps> = ({ onOpenDrawer }) => {
         </div>
       </div>
 
-      {/* Lado Derecho: Estado del Turno + Avatar */}
+      {/* Lado Derecho: Estado del Turno + PWA + Avatar */}
       <div className="flex items-center gap-2">
+        <InstallPwaButton variant="header" />
+
         {/* Píldora de estado de caja */}
         <div
           className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold border ${

@@ -40,6 +40,7 @@ export type LoginResponse = ApiResponse<LoginData>;
 
 export interface RegisterTenantRequest {
   idPais?: number;
+  idTipoDocumento?: number;
   nombreComercial: string;
   razonSocial?: string;
   tipoDocumento: string;
@@ -66,3 +67,37 @@ export interface RegisterTenantResponseData {
 }
 
 export type RegisterTenantResponse = ApiResponse<RegisterTenantResponseData>;
+
+export interface EstadoTenant {
+  id: number;
+  codigo: string;
+  nombre: string;
+  colorHex: string;
+  activo?: boolean;
+}
+
+export interface TenantListItem {
+  id: number;
+  nombreComercial: string;
+  razonSocial: string;
+  tipoDocumento: string;
+  ruc: string;
+  telefono: string;
+  correo: string;
+  direccion: string;
+  idEstadoTenant: number;
+  estadoCodigo: string;
+  estadoNombre: string;
+  estadoColorHex?: string;
+  planNombre: string;
+  precioMensual: number;
+  fechaInicio?: string;
+  fechaVencimiento?: string;
+  diasRestantes: number;
+  totalVentasMes: number;
+}
+
+export type ListarTenantsResponse = ApiResponse<TenantListItem[]>;
+export type ListarEstadosTenantResponse = ApiResponse<EstadoTenant[]>;
+
+

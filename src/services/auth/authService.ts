@@ -52,6 +52,23 @@ export const AuthService = {
     return response;
   },
 
+  listarTenants: async (): Promise<import('./authTypes').ListarTenantsResponse> => {
+    const response = await api.get<import('./authTypes').ListarTenantsResponse>('/auth/tenants');
+    return response;
+  },
+
+  listarEstadosTenant: async (): Promise<import('./authTypes').ListarEstadosTenantResponse> => {
+    const response = await api.get<import('./authTypes').ListarEstadosTenantResponse>('/auth/estados-tenant');
+    return response;
+  },
+
+  cambiarEstadoTenant: async (idTenant: number, idEstadoTenant: number): Promise<{ isSuccess: boolean; message: string }> => {
+    const response = await api.put<{ isSuccess: boolean; message: string }>(`/auth/tenants/${idTenant}/estado`, {
+      idEstadoTenant,
+    });
+    return response;
+  },
+
   logout: () => {
     AuthStorage.clearAuth();
     window.location.href = '/login';

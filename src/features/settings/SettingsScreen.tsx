@@ -34,19 +34,19 @@ export const SettingsScreen: React.FC = () => {
   const [selectedPaisId, setSelectedPaisId] = useState<number>(1);
 
   const [nombreNegocio, setNombreNegocio] = useState(() => {
-    return localStorage.getItem('almain_pos_business_name') || user?.nombreEmpresa || 'Bodega Don Pepe';
+    return localStorage.getItem('almain_pos_business_name') || user?.nombreEmpresa || '';
   });
   const [numeroRuc, setNumeroRuc] = useState(() => {
-    return localStorage.getItem('almain_pos_ruc') || '20601234567';
+    return localStorage.getItem('almain_pos_ruc') || '';
   });
   const [direccion, setDireccion] = useState(() => {
-    return localStorage.getItem('almain_pos_address') || 'Av. Los Próceres 123';
+    return localStorage.getItem('almain_pos_address') || '';
   });
   const [telefonoYape, setTelefonoYape] = useState(() => {
-    return localStorage.getItem('almain_pos_yape_phone') || '987654321';
+    return localStorage.getItem('almain_pos_yape_phone') || '';
   });
   const [titularYape] = useState(() => {
-    return localStorage.getItem('almain_pos_yape_owner') || user?.nombre || 'José Pepe Quispe';
+    return localStorage.getItem('almain_pos_yape_owner') || user?.nombre || '';
   });
   const [mensajePieTicket, setMensajePieTicket] = useState(() => {
     return localStorage.getItem('almain_pos_ticket_footer') || '¡Gracias por su preferencia! Revise su vuelto.';
@@ -330,7 +330,7 @@ export const SettingsScreen: React.FC = () => {
   };
 
   const handleTestPrint = async () => {
-    const comercio = (nombreNegocio || user?.nombreEmpresa || 'Bodega Don Pepe').trim();
+    const comercio = (nombreNegocio || user?.nombreEmpresa || 'Comercio').trim();
 
     toast.success('Enviando ticket de prueba a ticketera térmica...');
 
@@ -885,7 +885,7 @@ export const SettingsScreen: React.FC = () => {
                 </label>
                 <input
                   type="text"
-                  placeholder="ej: Yape Don Pepe, Plin Tienda"
+                  placeholder="ej: Yape Oficial, Plin Tienda"
                   value={walletForm.nombreMostrado}
                   onChange={(e) =>
                     setWalletForm((prev) => ({ ...prev, nombreMostrado: e.target.value }))

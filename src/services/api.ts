@@ -38,17 +38,25 @@ api.interceptors.request.use(
   (error) => Promise.reject(error)
 );
 
-// Interceptor para manejar expiración de token (401)
+// Interceptor para manejar expiración de sesión (401)
 api.interceptors.response.use(
   (response) => response.data,
   (error) => {
     if (error.response?.status === 401) {
-      AuthStorage.clearAuth();
-      const currentPath = window.location.pathname + window.location.search + window.location.hash;
-      if (currentPath && currentPath !== '/login' && currentPath !== '/') {
-        window.location.href = `/login?redirect=${encodeURIComponent(currentPath)}`;
-      } else {
-        window.location.href = '/login';
+      const requestUrl = (error.config?.url || '').toLowerCase();
+      const isLoginRequest = requestUrl.includes('/auth/login');
+      const isCurrentPathLogin = window.location.pathname === '/login';
+
+      // Si el 401 ocurrió durante el intento de inicio de sesión o el usuario ya está en /login,
+      // NO recargar la página: dejamos que el formulario capture el error y muestre el toast/alerta.
+      if (!isLoginRequest && !isCurrentPathLogin) {
+        AuthStorage.clearAuth();
+        const currentPath = window.location.pathname + window.location.search + window.location.hash;
+        if (currentPath && currentPath !== '/') {
+          window.location.href = `/login?redirect=${encodeURIComponent(currentPath)}`;
+        } else {
+          window.location.href = '/login';
+        }
       }
     } else if (error.response?.status >= 500) {
       const method = error.config?.method?.toUpperCase() || 'UNKNOWN';

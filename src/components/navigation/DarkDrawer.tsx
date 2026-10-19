@@ -18,6 +18,7 @@ import {
   ShieldCheck,
   Boxes,
 } from 'lucide-react';
+import { InstallPwaButton } from '@/components/common/InstallPwaButton';
 
 interface DarkDrawerProps {
   isOpen: boolean;
@@ -180,8 +181,10 @@ export const DarkDrawer: React.FC<DarkDrawerProps> = ({ isOpen, onClose }) => {
           ))}
         </div>
 
-        {/* Drawer Footer: Logout */}
-        <div className="p-3 border-t border-zinc-800">
+        {/* Drawer Footer: Install PWA + Logout */}
+        <div className="p-3 border-t border-zinc-800 space-y-2">
+          <InstallPwaButton variant="sidebar" />
+
           <button
             onClick={handleLogout}
             className="w-full h-11 rounded-xl bg-zinc-800 hover:bg-rose-950/40 text-rose-400 hover:text-rose-300 border border-zinc-700/60 font-bold text-xs flex items-center justify-center gap-2 transition-all cursor-pointer"
