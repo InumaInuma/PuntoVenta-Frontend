@@ -64,6 +64,21 @@ export const MobileAppLayout: React.FC<MobileAppLayoutProps> = ({ onOpenCartShee
     };
   }, [user?.tenantId]);
 
+  // Recuperación automática de sesión PWA: si el celular recargó la app al tomar foto de producto y cayó en "/", regresar a "/inventario"
+  useEffect(() => {
+    try {
+      const draft = sessionStorage.getItem('almain_product_form_draft');
+      if (draft && window.location.pathname === ROUTES.POS) {
+        const parsed = JSON.parse(draft);
+        if (Date.now() - (parsed.timestamp || 0) < 60 * 60 * 1000) {
+          navigate(ROUTES.INVENTARIO, { replace: true });
+        }
+      }
+    } catch {
+      // Ignorar
+    }
+  }, [navigate]);
+
   return (
     <div className="min-h-[100dvh] bg-slate-100 flex flex-col lg:flex-row">
       {/* 1. SIDEBAR EXCLUSIVO PARA PC Y TABLETS GRANDES (>= 1024px) */}

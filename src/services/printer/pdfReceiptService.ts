@@ -295,21 +295,35 @@ export const downloadReceiptPdf = (pdfBytes: Uint8Array, fileName: string) => {
 
 /**
  * Comparte el comprobante o cotización en formato PDF por WhatsApp.
- * - En celulares Android / iOS: Usa Web Share API para adjuntar el archivo PDF directamente a WhatsApp.
- * - En PC / Escritorio: Descarga el PDF automáticamente y abre WhatsApp Web con el texto preparado listo para adjuntar.
+ * - En celulares Android / iOS:
+ *   - Si hay número de teléfono: Abre WhatsApp de forma nativa e inmediata con window.location.href (100% blindado contra bloqueos de ventanas emergentes y sin descargas molestas).
+ *   - Si no hay número o se prefiere adjuntar: Usa la Web Share API para adjuntar el archivo PDF directamente a cualquier app.
+ * - En PC / Escritorio: Descarga el PDF automáticamente y abre WhatsApp Web.
  */
 export const shareReceiptPdfToWhatsApp = async (
   pdfBytes: Uint8Array,
   fileName: string,
   whatsappMessage: string,
   telefonoCliente?: string,
-  codigoPais: string = '51'
-): Promise<{ shared: boolean; method: 'native' | 'download_and_whatsapp' | 'aborted' }> => {
+  codigoPais: string = '51',
+  preferNativeShare: boolean = false
+): Promise<{ shared: boolean; method: 'native' | 'whatsapp_direct' | 'download_and_whatsapp' | 'aborted' }> => {
+  const isMobile = typeof navigator !== 'undefined' && (
+    /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) ||
+    (navigator.maxTouchPoints > 1 && /Macintosh/i.test(navigator.userAgent))
+  );
+
+  const cleanCountryCode = (codigoPais || '51').replace(/\D/g, '') || '51';
+  let phoneClean = telefonoCliente ? telefonoCliente.replace(/\D/g, '') : '';
+  if (phoneClean && !phoneClean.startsWith(cleanCountryCode)) {
+    phoneClean = `${cleanCountryCode}${phoneClean}`;
+  }
+
   const blob = new Blob([pdfBytes as any], { type: 'application/pdf' });
   const file = new File([blob], fileName, { type: 'application/pdf' });
 
-  // 1. Dispositivos móviles con soporte de Web Share API de archivos
-  if (typeof navigator !== 'undefined' && navigator.canShare && navigator.canShare({ files: [file] })) {
+  // 1. Compartir archivo PDF nativo (Hoja de compartir del celular para adjuntar archivo)
+  if ((preferNativeShare || !phoneClean) && typeof navigator !== 'undefined' && navigator.canShare && navigator.canShare({ files: [file] })) {
     try {
       await navigator.share({
         files: [file],
@@ -321,23 +335,26 @@ export const shareReceiptPdfToWhatsApp = async (
       if (err.name === 'AbortError') {
         return { shared: false, method: 'aborted' };
       }
-      console.warn('Fallback a WhatsApp Web tras navigator.share:', err);
+      console.warn('Fallback tras navigator.share:', err);
     }
   }
 
-  // 2. Fallback para PC / Navegadores de escritorio
-  downloadReceiptPdf(pdfBytes, fileName);
+  // 2. Abrir WhatsApp directamente con el número especificado
+  const whatsappUrl = phoneClean
+    ? `https://api.whatsapp.com/send?phone=${phoneClean}&text=${encodeURIComponent(whatsappMessage)}`
+    : `https://api.whatsapp.com/send?text=${encodeURIComponent(whatsappMessage)}`;
 
-  const cleanCountryCode = (codigoPais || '51').replace(/\D/g, '') || '51';
-  let phoneClean = telefonoCliente ? telefonoCliente.replace(/\D/g, '') : '';
-  if (phoneClean && !phoneClean.startsWith(cleanCountryCode)) {
-    phoneClean = `${cleanCountryCode}${phoneClean}`;
+  if (isMobile) {
+    // EN MÓVILES (Android / iOS):
+    // JAMÁS usar window.open(..., '_blank') tras operaciones asíncronas porque el navegador lo bloquea como popup.
+    // Usar window.location.href: lanza la app de WhatsApp directamente y sin alertas de bloqueo.
+    window.location.href = whatsappUrl;
+    return { shared: true, method: 'whatsapp_direct' };
+  } else {
+    // EN COMPUTADORAS / ESCRITORIO:
+    downloadReceiptPdf(pdfBytes, fileName);
+    window.open(whatsappUrl, '_blank', 'noopener,noreferrer');
+    return { shared: true, method: 'download_and_whatsapp' };
   }
-
-  const url = phoneClean
-    ? `https://wa.me/${phoneClean}?text=${encodeURIComponent(whatsappMessage)}`
-    : `https://wa.me/?text=${encodeURIComponent(whatsappMessage)}`;
-
-  window.open(url, '_blank');
-  return { shared: true, method: 'download_and_whatsapp' };
 };
+

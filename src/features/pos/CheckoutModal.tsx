@@ -66,7 +66,7 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
 
   // Descuento y Precio Final
   const [tipoDescuento, setTipoDescuento] = useState<'MONTO' | 'PORCENTAJE'>('MONTO');
-  const [descuentoInput, setDescuentoInput] = useState<string>('0');
+  const [descuentoInput, setDescuentoInput] = useState<string>('');
   const [precioFinalInput, setPrecioFinalInput] = useState<string>('');
   const [validezDias, setValidezDias] = useState<number>(7);
 
@@ -115,7 +115,8 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
   }, [items]);
 
   const descuentoCalculado = useMemo(() => {
-    const val = parseFloat(descuentoInput) || 0;
+    const sanitized = descuentoInput.replace(',', '.');
+    const val = parseFloat(sanitized) || 0;
     if (val <= 0) return 0;
     if (tipoDescuento === 'PORCENTAJE') {
       const pct = Math.min(100, Math.max(0, val));
@@ -130,22 +131,38 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
 
   const cur = countryDetails.currencySymbol || 'S/';
 
-  // Manejador de cambio de descuento manual
+  // Manejador de cambio de descuento manual (permite 0, 0., 0.5, .3, etc.)
   const handleDescuentoChange = (val: string) => {
-    setDescuentoInput(val);
-    setPrecioFinalInput('');
+    let clean = val.replace(',', '.');
+    if (clean === '.') clean = '0.';
+    if (/^0[0-9]/.test(clean)) clean = clean.replace(/^0+/, '');
+
+    if (clean === '' || /^[0-9]*\.?[0-9]*$/.test(clean)) {
+      if (tipoDescuento === 'PORCENTAJE') {
+        const num = parseFloat(clean);
+        if (!isNaN(num) && num > 100) return;
+      }
+      setDescuentoInput(clean);
+      setPrecioFinalInput('');
+    }
   };
 
   // Manejador de cambio de Precio Final deseado
   const handlePrecioFinalChange = (val: string) => {
-    setPrecioFinalInput(val);
-    const pf = parseFloat(val);
-    if (!isNaN(pf) && pf >= 0) {
-      setTipoDescuento('MONTO');
-      const diff = Math.max(0, subtotalProductos - pf);
-      setDescuentoInput(diff > 0 ? diff.toFixed(2) : '0');
-    } else {
-      setDescuentoInput('0');
+    let clean = val.replace(',', '.');
+    if (clean === '.') clean = '0.';
+    if (/^0[0-9]/.test(clean)) clean = clean.replace(/^0+/, '');
+
+    if (clean === '' || /^[0-9]*\.?[0-9]*$/.test(clean)) {
+      setPrecioFinalInput(clean);
+      const pf = parseFloat(clean);
+      if (!isNaN(pf) && pf >= 0) {
+        setTipoDescuento('MONTO');
+        const diff = Math.max(0, subtotalProductos - pf);
+        setDescuentoInput(diff > 0 ? (diff % 1 === 0 ? diff.toString() : diff.toFixed(2)) : '');
+      } else {
+        setDescuentoInput('');
+      }
     }
   };
 
@@ -203,7 +220,7 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
     setRapidoNombre('');
     setRapidoTelefono('');
     setTelefonoDirecto('');
-    setDescuentoInput('0');
+    setDescuentoInput('');
     setPrecioFinalInput('');
     setModoTab('VENTA');
   }, [isOpen]);
@@ -654,11 +671,10 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
             <div className="flex items-center gap-1.5">
               <div className="relative flex-1">
                 <input
-                  type="number"
-                  step="any"
+                  type="text"
                   inputMode="decimal"
-                  placeholder="0"
-                  value={descuentoInput === '0' ? '' : descuentoInput}
+                  placeholder="0.00"
+                  value={descuentoInput}
                   onChange={(e) => handleDescuentoChange(e.target.value)}
                   className="w-full h-10 bg-slate-50 border border-slate-200 focus:border-slate-400 rounded-xl px-3 text-xs font-bold text-slate-800 outline-none"
                 />
@@ -707,8 +723,7 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
                 {cur}
               </span>
               <input
-                type="number"
-                step="any"
+                type="text"
                 inputMode="decimal"
                 placeholder={subtotalProductos.toFixed(2)}
                 value={precioFinalInput}

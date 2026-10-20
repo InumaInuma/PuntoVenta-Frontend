@@ -87,6 +87,33 @@ export const productosService = {
     };
   },
 
+  verificarCodigo: async (codigoBarras: string): Promise<Producto | null> => {
+    try {
+      const response = await api.get<ApiResponse<any>>(`/productos/verificar-codigo/${encodeURIComponent(codigoBarras)}`);
+      const p = response.data;
+      if (!p) return null;
+      return {
+        idProducto: p.idProducto || p.id || p.Id,
+        idEmpresa: p.idEmpresa || p.tenantId || 1,
+        idCategoria: p.idCategoria || p.IdCategoria,
+        nombreCategoria: p.nombreCategoria || p.categoriaNombre || p.CategoriaNombre,
+        codigoBarras: p.codigoBarras || p.CodigoBarras || '',
+        nombre: p.nombre || p.Nombre,
+        descripcion: p.descripcion || p.Descripcion,
+        unidadMedida: p.unidadMedida || p.unidadMedidaCodigo || p.UnidadMedidaCodigo || 'UND',
+        precioVenta: p.precioVenta || p.PrecioVenta || 0,
+        precioCosto: p.precioCosto || p.PrecioCosto || 0,
+        stockActual: p.stockActual !== undefined ? p.stockActual : (p.StockActual !== undefined ? p.StockActual : 0),
+        stockMinimo: p.stockMinimo !== undefined ? p.stockMinimo : 1,
+        permiteDecimales: !!(p.permiteDecimales || p.PermiteDecimales),
+        imagenUrl: p.imagenUrl || p.ImagenUrl || undefined,
+        activo: p.activo !== undefined ? p.activo : (p.Activo !== undefined ? p.Activo : true),
+      };
+    } catch {
+      return null;
+    }
+  },
+
   generarCodigo: async (): Promise<string> => {
     const response = await api.get<ApiResponse<string>>('/productos/generar-codigo');
     return response.data;

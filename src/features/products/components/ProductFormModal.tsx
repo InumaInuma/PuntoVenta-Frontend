@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { Modal } from '@/components/ui/Modal';
 import type { Producto, Categoria } from '@/types';
-import { Camera, Barcode, Printer, Trash2 } from 'lucide-react';
+import { Camera, Barcode, Printer, Trash2, Image as ImageIcon } from 'lucide-react';
 import { productosService } from '@/services/backend/productosService';
 import { comprimirAWebP } from '@/utils/imageCompressor';
+import { ProductCameraModal } from './ProductCameraModal';
 import toast from 'react-hot-toast';
 
 export interface ProductFormData {
@@ -60,10 +61,13 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
   const [permiteDecimales, setPermiteDecimales] = useState(false);
   const [imagenUrl, setImagenUrl] = useState<string>('');
   const [serverDuplicate, setServerDuplicate] = useState<string | null>(null);
+  const [isCameraModalOpen, setIsCameraModalOpen] = useState(false);
 
   const fileInputRef = React.useRef<HTMLInputElement | null>(null);
+  const lastGeneratedBarcodeRef = React.useRef<string | null>(null);
+  const DRAFT_STORAGE_KEY = 'almain_product_form_draft';
 
-  // Sincronizar formulario al abrir o cambiar de producto en edición
+  // Sincronizar formulario al abrir o cambiar de producto en edición (o restaurar borrador si el móvil reinició la pestaña)
   useEffect(() => {
     if (!isOpen) return;
 
@@ -78,18 +82,69 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
       setPermiteDecimales(editingProduct.permiteDecimales);
       setImagenUrl(editingProduct.imagenUrl || '');
     } else {
-      setNombre('');
-      setCodigoBarras('');
-      setIdCategoria(categorias[0]?.idCategoria ?? 1);
-      setPrecioVenta('');
-      setPrecioCosto('');
-      setStockActual('');
-      setUnidadMedida('UNIDAD');
-      setPermiteDecimales(false);
-      setImagenUrl('');
+      let restored = false;
+      try {
+        const raw = sessionStorage.getItem(DRAFT_STORAGE_KEY);
+        if (raw) {
+          const draft = JSON.parse(raw);
+          // Restaurar si el borrador fue guardado recientemente (< 1 hora)
+          if (Date.now() - (draft.timestamp || 0) < 60 * 60 * 1000) {
+            setNombre(draft.nombre || '');
+            setCodigoBarras(draft.codigoBarras || '');
+            setIdCategoria(draft.idCategoria || (categorias[0]?.idCategoria ?? 1));
+            setPrecioVenta(draft.precioVenta || '');
+            setPrecioCosto(draft.precioCosto || '');
+            setStockActual(draft.stockActual || '');
+            setUnidadMedida(draft.unidadMedida || 'UNIDAD');
+            setPermiteDecimales(!!draft.permiteDecimales);
+            setImagenUrl(draft.imagenUrl || '');
+            restored = true;
+          }
+        }
+      } catch (err) {
+        console.warn('Error al leer borrador previo:', err);
+      }
+
+      if (!restored) {
+        setNombre('');
+        setCodigoBarras('');
+        setIdCategoria(categorias[0]?.idCategoria ?? 1);
+        setPrecioVenta('');
+        setPrecioCosto('');
+        setStockActual('');
+        setUnidadMedida('UNIDAD');
+        setPermiteDecimales(false);
+        setImagenUrl('');
+      }
     }
     setServerDuplicate(null);
+    lastGeneratedBarcodeRef.current = null;
   }, [isOpen, editingProduct, categorias]);
+
+  // Persistir borrador en sessionStorage para blindar contra suspensiones de memoria en celulares
+  useEffect(() => {
+    if (!isOpen || editingProduct) return;
+    if (!nombre && !codigoBarras && !precioVenta && !imagenUrl) return;
+
+    try {
+      const draft = {
+        nombre,
+        codigoBarras,
+        idCategoria,
+        precioVenta,
+        precioCosto,
+        stockActual,
+        unidadMedida,
+        permiteDecimales,
+        imagenUrl,
+        timestamp: Date.now(),
+      };
+      sessionStorage.setItem(DRAFT_STORAGE_KEY, JSON.stringify(draft));
+    } catch {
+      // Ignorar si se supera cuota de storage
+    }
+  }, [isOpen, editingProduct, nombre, codigoBarras, idCategoria, precioVenta, precioCosto, stockActual, unidadMedida, permiteDecimales, imagenUrl]);
+
 
   // Si llega un código escaneado desde el modal de cámara
   useEffect(() => {
@@ -99,10 +154,16 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
     }
   }, [scannedBarcode, onClearScannedBarcode]);
 
-  // Validación de código de barras duplicado: local inmediata + backend debounce
+  // Validación de código de barras duplicado: local inmediata + backend debounce con verificarCodigo
   useEffect(() => {
     const trimmed = codigoBarras.trim();
     if (!trimmed) {
+      setServerDuplicate(null);
+      return;
+    }
+
+    // Si el código acaba de ser generado por el backend, ya está garantizado que es único
+    if (trimmed === lastGeneratedBarcodeRef.current) {
       setServerDuplicate(null);
       return;
     }
@@ -119,10 +180,10 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
       return;
     }
 
-    // 2. Verificación debounce contra toda la base de datos
+    // 2. Verificación debounce contra el endpoint verificar-codigo (sin error 404 en consola)
     const timer = setTimeout(async () => {
       try {
-        const prod = await productosService.getByCodigo(trimmed);
+        const prod = await productosService.verificarCodigo(trimmed);
         if (prod && prod.idProducto !== editingProduct?.idProducto) {
           setServerDuplicate(prod.nombre);
         } else {
@@ -171,6 +232,7 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
   const handleGenerateBarcode = async () => {
     try {
       const code = await productosService.generarCodigo();
+      lastGeneratedBarcodeRef.current = code;
       setCodigoBarras(code);
       setServerDuplicate(null);
       toast.success('Código EAN-13 único generado');
@@ -183,9 +245,16 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
         sum += i % 2 === 0 ? num : num * 3;
       }
       const checkDigit = (10 - (sum % 10)) % 10;
-      setCodigoBarras(`${base}${checkDigit}`);
+      const fallbackCode = `${base}${checkDigit}`;
+      lastGeneratedBarcodeRef.current = fallbackCode;
+      setCodigoBarras(fallbackCode);
       toast.success('Código EAN-13 generado');
     }
+  };
+
+  const handleCloseModal = () => {
+    sessionStorage.removeItem(DRAFT_STORAGE_KEY);
+    onClose();
   };
 
   const handleFormSubmit = (e: React.FormEvent) => {
@@ -206,6 +275,7 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
       return;
     }
 
+    sessionStorage.removeItem(DRAFT_STORAGE_KEY);
     onSubmit({
       idProducto: editingProduct?.idProducto,
       nombre: nombre.trim(),
@@ -221,84 +291,109 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
   };
 
   return (
-    <Modal
-      isOpen={isOpen}
-      onClose={onClose}
-      title={editingProduct ? 'Editar Producto' : 'Registrar Producto'}
-      position="bottom"
-    >
-      <form onSubmit={handleFormSubmit} className="space-y-3.5">
-        {/* NOMBRE DEL PRODUCTO */}
-        <div>
-          <label className="text-xs font-black text-slate-700 uppercase tracking-wide">
-            NOMBRE DEL PRODUCTO
-          </label>
-          <input
-            type="text"
-            placeholder="ej: Arroz Costeño 1kg"
-            value={nombre}
-            onChange={(e) => setNombre(e.target.value)}
-            className="w-full h-12 bg-slate-50 border border-slate-200 rounded-xl px-3.5 text-sm font-semibold mt-1 outline-none focus:border-red-500 focus:bg-white transition-all"
-            required
-            autoFocus
-          />
-        </div>
-
-        {/* FOTO DEL PRODUCTO */}
-        <div>
-          <div className="flex items-center justify-between h-5 mb-1">
+    <>
+      <Modal
+        isOpen={isOpen}
+        onClose={handleCloseModal}
+        title={editingProduct ? 'Editar Producto' : 'Registrar Producto'}
+        position="bottom"
+      >
+        <form onSubmit={handleFormSubmit} className="space-y-3.5">
+          {/* NOMBRE DEL PRODUCTO */}
+          <div>
             <label className="text-xs font-black text-slate-700 uppercase tracking-wide">
-              FOTO DEL PRODUCTO
+              NOMBRE DEL PRODUCTO
             </label>
-            {imagenUrl && (
-              <button
-                type="button"
-                onClick={handleRemoveImage}
-                className="text-[11px] font-bold text-rose-500 hover:text-rose-600 cursor-pointer"
-              >
-                Quitar foto
-              </button>
-            )}
+            <input
+              type="text"
+              placeholder="ej: Arroz Costeño 1kg"
+              value={nombre}
+              onChange={(e) => setNombre(e.target.value)}
+              className="w-full h-12 bg-slate-50 border border-slate-200 rounded-xl px-3.5 text-sm font-semibold mt-1 outline-none focus:border-red-500 focus:bg-white transition-all"
+              required
+              autoFocus
+            />
           </div>
-          <input
-            type="file"
-            ref={fileInputRef}
-            onChange={handleImageChange}
-            accept="image/*"
-            className="hidden"
-          />
 
-          {imagenUrl ? (
-            <div className="flex items-center gap-3 p-2 bg-slate-50 border border-slate-200 rounded-xl">
-              <div className="w-14 h-14 rounded-lg overflow-hidden bg-white border border-slate-200 shrink-0 shadow-xs">
-                <img
-                  src={imagenUrl}
-                  alt="Vista previa"
-                  className="w-full h-full object-cover"
-                />
+          {/* FOTO DEL PRODUCTO */}
+          <div>
+            <div className="flex items-center justify-between h-5 mb-1.5">
+              <label className="text-xs font-black text-slate-700 uppercase tracking-wide">
+                FOTO DEL PRODUCTO
+              </label>
+              {imagenUrl && (
+                <button
+                  type="button"
+                  onClick={handleRemoveImage}
+                  className="text-[11px] font-bold text-rose-500 hover:text-rose-600 cursor-pointer"
+                >
+                  Quitar foto
+                </button>
+              )}
+            </div>
+
+            <input
+              type="file"
+              ref={fileInputRef}
+              onChange={handleImageChange}
+              accept="image/*"
+              className="hidden"
+            />
+
+            {imagenUrl ? (
+              <div className="flex items-center gap-3 p-2.5 bg-slate-50 border border-slate-200 rounded-2xl">
+                <div className="w-16 h-16 rounded-xl overflow-hidden bg-white border border-slate-200 shrink-0 shadow-xs">
+                  <img
+                    src={imagenUrl}
+                    alt="Vista previa"
+                    className="w-full h-full object-cover"
+                  />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-xs font-bold text-slate-800">Foto optimizada</p>
+                  <div className="flex items-center gap-3 mt-1.5">
+                    <button
+                      type="button"
+                      onClick={() => setIsCameraModalOpen(true)}
+                      className="text-[11px] font-bold text-red-500 hover:text-red-600 flex items-center gap-1 cursor-pointer"
+                    >
+                      <Camera className="w-3.5 h-3.5" />
+                      Tomar otra
+                    </button>
+                    <span className="text-slate-300">•</span>
+                    <button
+                      type="button"
+                      onClick={() => fileInputRef.current?.click()}
+                      className="text-[11px] font-bold text-slate-600 hover:text-slate-900 flex items-center gap-1 cursor-pointer"
+                    >
+                      <ImageIcon className="w-3.5 h-3.5" />
+                      Galería
+                    </button>
+                  </div>
+                </div>
               </div>
-              <div className="flex-1 min-w-0">
-                <p className="text-xs font-bold text-slate-800">Foto cargada</p>
+            ) : (
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  onClick={() => setIsCameraModalOpen(true)}
+                  className="h-14 bg-red-50/70 hover:bg-red-50 active:scale-95 border border-red-200 hover:border-red-400 rounded-2xl flex flex-col items-center justify-center gap-0.5 text-red-600 transition-all cursor-pointer shadow-xs"
+                >
+                  <Camera className="w-4 h-4 stroke-[2.5]" />
+                  <span className="text-[11px] font-black">Usar Cámara</span>
+                </button>
+
                 <button
                   type="button"
                   onClick={() => fileInputRef.current?.click()}
-                  className="text-[11px] font-bold text-red-500 hover:text-red-600 underline cursor-pointer mt-0.5"
+                  className="h-14 bg-slate-50 hover:bg-slate-100 active:scale-95 border border-slate-200 hover:border-slate-300 rounded-2xl flex flex-col items-center justify-center gap-0.5 text-slate-700 transition-all cursor-pointer shadow-xs"
                 >
-                  Cambiar imagen
+                  <ImageIcon className="w-4 h-4 text-slate-500" />
+                  <span className="text-[11px] font-black">Subir Archivo</span>
                 </button>
               </div>
-            </div>
-          ) : (
-            <button
-              type="button"
-              onClick={() => fileInputRef.current?.click()}
-              className="w-full h-12 bg-slate-50 hover:bg-red-50/30 border border-dashed border-slate-200 hover:border-red-400 rounded-xl flex items-center justify-center gap-2 text-slate-500 hover:text-red-600 transition-all cursor-pointer"
-            >
-              <Camera className="w-4 h-4 text-slate-400 group-hover:text-red-500" />
-              <span className="text-xs font-bold">Subir foto del producto</span>
-            </button>
-          )}
-        </div>
+            )}
+          </div>
 
         {/* CATEGORÍA Y UNIDAD MEDIDA (Alineadas en la misma línea) */}
         <div className="grid grid-cols-2 gap-2.5">
@@ -500,5 +595,17 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
         </div>
       </form>
     </Modal>
+
+    {/* MODAL: CÁMARA EN VIVO DENTRO DE LA APP (SIN SALIR DEL NAVEGADOR NI PERDER EL FORMULARIO) */}
+    <ProductCameraModal
+      isOpen={isCameraModalOpen}
+      onClose={() => setIsCameraModalOpen(false)}
+      onPhotoCaptured={(webpUrl) => {
+        setImagenUrl(webpUrl);
+        setIsCameraModalOpen(false);
+      }}
+      onOpenGallery={() => fileInputRef.current?.click()}
+    />
+  </>
   );
 };

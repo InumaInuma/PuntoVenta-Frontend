@@ -180,7 +180,7 @@ export const ReceiptModal: React.FC<ReceiptModalProps> = ({
     };
   };
 
-  const handleShareWhatsAppPdf = async (targetPhone?: string) => {
+  const handleShareWhatsAppPdf = async (targetPhone?: string, preferNative: boolean = false) => {
     const rawNumber = targetPhone !== undefined ? targetPhone : telefonoWhatsApp;
     const cleanPhone = rawNumber.replace(/\D/g, '');
 
@@ -232,13 +232,17 @@ export const ReceiptModal: React.FC<ReceiptModalProps> = ({
         fileName,
         texto,
         cleanPhone || undefined,
-        countryDetails.phoneCode
+        countryDetails.phoneCode,
+        preferNative
       );
-      if (result.method === 'native') {
-        toast.success(cleanPhone ? `¡PDF preparado para enviar a +${countryDetails.phoneCode} ${cleanPhone}!` : '¡PDF preparado para enviar por WhatsApp!');
+      if (result.method === 'whatsapp_direct') {
+        toast.success(cleanPhone ? `¡Abriendo WhatsApp con +${countryDetails.phoneCode} ${cleanPhone}!` : '¡Abriendo WhatsApp!');
+      } else if (result.method === 'native') {
+        toast.success(cleanPhone ? `¡PDF preparado para enviar a +${countryDetails.phoneCode} ${cleanPhone}!` : '¡PDF preparado para compartir!');
       } else if (result.method === 'download_and_whatsapp') {
         toast.success(cleanPhone ? `PDF descargado. ¡Se abrió WhatsApp con +${countryDetails.phoneCode} ${cleanPhone}!` : 'PDF descargado. ¡Se abrió WhatsApp!');
       }
+      setIsAskingPhone(false);
       setIsAskingPhone(false);
     } catch (err: any) {
       console.error('Error al generar o compartir PDF:', err);
@@ -569,14 +573,24 @@ export const ReceiptModal: React.FC<ReceiptModalProps> = ({
                   </span>
                 </button>
 
-                <button
-                  type="button"
-                  disabled={isGeneratingPdf}
-                  onClick={() => handleShareWhatsAppPdf('')}
-                  className="w-full py-1 text-center text-[11px] font-bold text-emerald-800 hover:text-emerald-950 hover:underline cursor-pointer transition-colors"
-                >
-                  O abrir WhatsApp sin número (elegir contacto en mi app)
-                </button>
+                <div className="flex flex-col gap-1 pt-0.5">
+                  <button
+                    type="button"
+                    disabled={isGeneratingPdf}
+                    onClick={() => handleShareWhatsAppPdf('', false)}
+                    className="w-full py-0.5 text-center text-[11px] font-bold text-emerald-800 hover:text-emerald-950 hover:underline cursor-pointer transition-colors"
+                  >
+                    💬 O abrir WhatsApp para elegir contacto
+                  </button>
+                  <button
+                    type="button"
+                    disabled={isGeneratingPdf}
+                    onClick={() => handleShareWhatsAppPdf('', true)}
+                    className="w-full py-0.5 text-center text-[11px] font-semibold text-slate-600 hover:text-slate-800 hover:underline cursor-pointer transition-colors"
+                  >
+                    📎 O compartir archivo PDF con otra app (Nativo)
+                  </button>
+                </div>
               </div>
             </div>
           ) : (

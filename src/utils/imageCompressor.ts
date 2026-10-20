@@ -1,50 +1,99 @@
 /**
  * Utilidad de compresión y conversión de imágenes en el cliente (Frontend).
- * Redimensiona a un máximo de 800x800 px y exporta en formato WebP optimizado (< 100 KB).
+ * Optimizado para dispositivos móviles para evitar picos de memoria (OOM) y reinicios de pestañas:
+ * 1. Usa createImageBitmap cuando está disponible (decodificación nativa eficiente en hardware).
+ * 2. Usa URL.createObjectURL con revocación inmediata en lugar de FileReader Base64.
+ * 3. Redimensiona manteniendo la proporción (máx 800x800 px) y exporta en WebP optimizado (< 100 KB).
  */
-export async function comprimirAWebP(file: File, maxDim = 800, quality = 0.82): Promise<string> {
+export async function comprimirAWebP(file: File | Blob, maxDim = 800, quality = 0.82): Promise<string> {
+  // Estrategia 1: createImageBitmap nativo (No infla la memoria JS con bitmaps sin comprimir)
+  if (typeof window !== 'undefined' && 'createImageBitmap' in window) {
+    try {
+      const bitmap = await createImageBitmap(file);
+      let width = bitmap.width;
+      let height = bitmap.height;
+
+      if (width > height) {
+        if (width > maxDim) {
+          height = Math.round((height * maxDim) / width);
+          width = maxDim;
+        }
+      } else {
+        if (height > maxDim) {
+          width = Math.round((width * maxDim) / height);
+          height = maxDim;
+        }
+      }
+
+      const canvas = document.createElement('canvas');
+      canvas.width = width;
+      canvas.height = height;
+
+      const ctx = canvas.getContext('2d', { willReadFrequently: false });
+      if (ctx) {
+        ctx.drawImage(bitmap, 0, 0, width, height);
+        bitmap.close();
+
+        let dataUrl = canvas.toDataURL('image/webp', quality);
+        if (!dataUrl.startsWith('data:image/webp')) {
+          dataUrl = canvas.toDataURL('image/jpeg', quality);
+        }
+        return dataUrl;
+      }
+      bitmap.close();
+    } catch (bitmapError) {
+      console.warn('Fallback de createImageBitmap a Image:', bitmapError);
+    }
+  }
+
+  // Estrategia 2: URL.createObjectURL con revocación de memoria inmediata
   return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onerror = () => reject(new Error('No se pudo leer el archivo de imagen.'));
-    reader.onload = (event) => {
-      const img = new Image();
-      img.onerror = () => reject(new Error('Formato de imagen inválido o corrupto.'));
-      img.onload = () => {
-        const canvas = document.createElement('canvas');
-        let width = img.width;
-        let height = img.height;
+    const objectUrl = URL.createObjectURL(file);
+    const img = new Image();
 
-        // Mantener relación de aspecto con tope máximo en 800px
-        if (width > height) {
-          if (width > maxDim) {
-            height = Math.round((height * maxDim) / width);
-            width = maxDim;
-          }
-        } else {
-          if (height > maxDim) {
-            width = Math.round((width * maxDim) / height);
-            height = maxDim;
-          }
+    img.onload = () => {
+      URL.revokeObjectURL(objectUrl);
+
+      let width = img.width;
+      let height = img.height;
+
+      if (width > height) {
+        if (width > maxDim) {
+          height = Math.round((height * maxDim) / width);
+          width = maxDim;
         }
-
-        canvas.width = width;
-        canvas.height = height;
-
-        const ctx = canvas.getContext('2d');
-        if (!ctx) {
-          // Fallback en caso extremo
-          resolve(event.target?.result as string);
-          return;
+      } else {
+        if (height > maxDim) {
+          width = Math.round((width * maxDim) / height);
+          height = maxDim;
         }
+      }
 
-        ctx.drawImage(img, 0, 0, width, height);
+      const canvas = document.createElement('canvas');
+      canvas.width = width;
+      canvas.height = height;
 
-        // Conversión a WebP garantizada
-        const webpDataUrl = canvas.toDataURL('image/webp', quality);
-        resolve(webpDataUrl);
-      };
-      img.src = event.target?.result as string;
+      const ctx = canvas.getContext('2d');
+      if (!ctx) {
+        reject(new Error('No se pudo inicializar el contexto 2D del canvas.'));
+        return;
+      }
+
+      ctx.drawImage(img, 0, 0, width, height);
+
+      let dataUrl = canvas.toDataURL('image/webp', quality);
+      if (!dataUrl.startsWith('data:image/webp')) {
+        dataUrl = canvas.toDataURL('image/jpeg', quality);
+      }
+      resolve(dataUrl);
     };
-    reader.readAsDataURL(file);
+
+    img.onerror = () => {
+      URL.revokeObjectURL(objectUrl);
+      reject(new Error('Formato de imagen inválido o corrupto.'));
+    };
+
+    img.src = objectUrl;
   });
 }
+

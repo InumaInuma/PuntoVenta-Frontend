@@ -130,6 +130,21 @@ export const InventoryScreen: React.FC = () => {
     return () => clearTimeout(timer);
   }, [search]);
 
+  // Restaurar modal de producto automáticamente si se regresa de suspensión o recarga con borrador activo
+  useEffect(() => {
+    try {
+      const draft = sessionStorage.getItem('almain_product_form_draft');
+      if (draft) {
+        const parsed = JSON.parse(draft);
+        if (Date.now() - (parsed.timestamp || 0) < 60 * 60 * 1000) {
+          setIsFormModalOpen(true);
+        }
+      }
+    } catch {
+      // Ignorar
+    }
+  }, []);
+
   // Selección de categoría
   const handleSelectCategoria = (catId: number | null) => {
     setSelectedCategoria(catId);
