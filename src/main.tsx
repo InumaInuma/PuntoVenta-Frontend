@@ -26,3 +26,12 @@ if ('serviceWorker' in navigator && (window.location.protocol === 'https:' || wi
   });
 }
 
+// Garantizar almacenamiento persistente en navegadores móviles (evita que el SO limpie la sesión)
+if (typeof navigator !== 'undefined' && navigator.storage && navigator.storage.persist) {
+  navigator.storage.persist().then((isPersisted) => {
+    if (isPersisted) {
+      console.log('[Almain POS PWA] Almacenamiento persistente garantizado por el navegador.');
+    }
+  }).catch(() => {});
+}
+
