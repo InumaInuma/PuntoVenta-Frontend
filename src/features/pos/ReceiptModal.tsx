@@ -206,7 +206,7 @@ export const ReceiptModal: React.FC<ReceiptModalProps> = ({
         : '';
 
       const texto = isCotizacion
-        ? `¡Hola! Te compartimos la *Cotización en PDF* de *${nombreNegocio}*.\n\n` +
+        ? `¡Hola! Te compartimos la *Cotización* de *${nombreNegocio}*.\n\n` +
           `📄 *Cotización:* #${saleData.codigoVenta}\n` +
           `📅 *Fecha:* ${fecha.toLocaleString('es-PE')}\n` +
           `⏳ *Validez:* ${saleData.validezDias || 7} días calendario\n` +
@@ -214,7 +214,9 @@ export const ReceiptModal: React.FC<ReceiptModalProps> = ({
           itemsText +
           descuentoText +
           `\n\n💰 *Total Cotizado:* ${cur} ${saleData.total.toFixed(2)}\n\n` +
-          `📎 _Te adjuntamos el documento PDF oficial con el detalle._`
+          (preferNative
+            ? `📎 _Adjunto documento PDF oficial con el detalle._`
+            : `✨ _Cotización oficial emitida por ${nombreNegocio}._`)
         : `¡Hola! Gracias por tu compra en *${nombreNegocio}*.\n\n` +
           `🧾 *${tipoDoc}:* #${saleData.codigoVenta}\n` +
           `📅 *Fecha:* ${fecha.toLocaleString('es-PE')}\n` +
@@ -225,7 +227,9 @@ export const ReceiptModal: React.FC<ReceiptModalProps> = ({
           `💳 *Método de Pago:* ${saleData.metodoPago}\n` +
           (saleData.vuelto > 0 ? `💵 *Vuelto:* ${cur} ${saleData.vuelto.toFixed(2)}\n` : '') +
           `\n${pieTicket}\n\n` +
-          `📎 _Adjunto comprobante emitido en PDF._`;
+          (preferNative
+            ? `📎 _Adjunto comprobante emitido en formato PDF._`
+            : `✨ _Comprobante digital emitido por ${nombreNegocio}._`);
 
       const result = await shareReceiptPdfToWhatsApp(
         pdfBytes,
@@ -551,76 +555,85 @@ export const ReceiptModal: React.FC<ReceiptModalProps> = ({
                 </div>
               </div>
 
-              {/* Botón enviar al número y opción fallback */}
-              <div className="space-y-1.5 pt-0.5">
+              {/* Acciones de envío por WhatsApp */}
+              <div className="space-y-2 pt-0.5">
+                {/* Opción 1: Adjuntar Archivo PDF real a WhatsApp (Nativo) */}
                 <button
                   type="button"
-                  disabled={telefonoWhatsApp.length < (countryDetails.phoneLength - 1) || isGeneratingPdf}
-                  onClick={() => handleShareWhatsAppPdf(telefonoWhatsApp)}
+                  disabled={isGeneratingPdf}
+                  onClick={() => handleShareWhatsAppPdf('', true)}
                   className="w-full h-11 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white font-black text-xs rounded-xl shadow-md shadow-emerald-600/30 flex items-center justify-center gap-2 cursor-pointer transition-all active:scale-[0.98]"
                 >
                   {isGeneratingPdf ? (
                     <Loader2 className="w-4 h-4 animate-spin" />
                   ) : (
-                    <Send className="w-4 h-4 stroke-[2.5]" />
+                    <Share2 className="w-4 h-4 stroke-[2.5]" />
                   )}
                   <span>
-                    {isGeneratingPdf
-                      ? 'PREPARANDO PDF...'
-                      : telefonoWhatsApp.length >= (countryDetails.phoneLength - 1)
-                      ? `ENVIAR AL WHATSAPP (+${countryDetails.phoneCode} ${telefonoWhatsApp})`
-                      : `INGRESA EL CELULAR (${countryDetails.phoneLength} DÍGITOS)`}
+                    {isGeneratingPdf ? 'PREPARANDO PDF...' : '📎 ADJUNTAR ARCHIVO PDF A WHATSAPP'}
                   </span>
                 </button>
 
-                <div className="flex flex-col gap-1 pt-0.5">
+                {/* Opción 2: Enviar directo al chat con el número ingresado */}
+                {telefonoWhatsApp.length >= (countryDetails.phoneLength - 1) && (
                   <button
                     type="button"
                     disabled={isGeneratingPdf}
-                    onClick={() => handleShareWhatsAppPdf('', false)}
-                    className="w-full py-0.5 text-center text-[11px] font-bold text-emerald-800 hover:text-emerald-950 hover:underline cursor-pointer transition-colors"
+                    onClick={() => handleShareWhatsAppPdf(telefonoWhatsApp, false)}
+                    className="w-full h-10 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-300 font-bold text-xs rounded-xl flex items-center justify-center gap-2 cursor-pointer transition-all active:scale-[0.98]"
                   >
-                    💬 O abrir WhatsApp para elegir contacto
+                    <Send className="w-4 h-4 stroke-[2.5]" />
+                    <span>💬 Enviar resumen directo a (+{countryDetails.phoneCode} {telefonoWhatsApp})</span>
                   </button>
-                  <button
-                    type="button"
-                    disabled={isGeneratingPdf}
-                    onClick={() => handleShareWhatsAppPdf('', true)}
-                    className="w-full py-0.5 text-center text-[11px] font-semibold text-slate-600 hover:text-slate-800 hover:underline cursor-pointer transition-colors"
-                  >
-                    📎 O compartir archivo PDF con otra app (Nativo)
-                  </button>
+                )}
+
+                <div className="text-center pt-0.5">
+                  <span className="text-[10px] text-slate-500">
+                    💡 <i>WhatsApp solo permite adjuntar archivos PDF físicos a través del menú nativo.</i>
+                  </span>
                 </div>
               </div>
             </div>
           ) : (
-            /* Botón Principal: Enviar PDF por WhatsApp */
-            <div className="space-y-1.5">
-              <button
-                type="button"
-                onClick={() => {
-                  if (telefonoWhatsApp && telefonoWhatsApp.length >= (countryDetails.phoneLength - 1)) {
-                    handleShareWhatsAppPdf(telefonoWhatsApp);
-                  } else {
-                    setIsAskingPhone(true);
-                  }
-                }}
-                disabled={isGeneratingPdf}
-                className="w-full h-12 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-60 text-white font-black text-xs rounded-2xl shadow-lg shadow-emerald-600/30 flex items-center justify-center gap-2 cursor-pointer transition-all active:scale-[0.98]"
-              >
-                {isGeneratingPdf ? (
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                ) : (
-                  <Share2 className="w-4 h-4 stroke-[2.5]" />
-                )}
-                <span>
-                  {isGeneratingPdf
-                    ? 'GENERANDO PDF...'
-                    : telefonoWhatsApp && telefonoWhatsApp.length >= (countryDetails.phoneLength - 1)
-                    ? `ENVIAR PDF A WHATSAPP (+${countryDetails.phoneCode} ${telefonoWhatsApp})`
-                    : `ENVIAR ${isCotizacion ? 'COTIZACIÓN' : 'COMPROBANTE'} EN PDF POR WHATSAPP`}
-                </span>
-              </button>
+            /* Botones Principales cuando ya hay número o está colapsado */
+            <div className="space-y-2">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                {/* Botón A: Adjuntar PDF Físico a WhatsApp */}
+                <button
+                  type="button"
+                  onClick={() => handleShareWhatsAppPdf('', true)}
+                  disabled={isGeneratingPdf}
+                  className="w-full h-11 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-60 text-white font-black text-xs rounded-xl shadow-md shadow-emerald-600/30 flex items-center justify-center gap-2 cursor-pointer transition-all active:scale-[0.98]"
+                >
+                  {isGeneratingPdf ? (
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                  ) : (
+                    <Share2 className="w-4 h-4 stroke-[2.5]" />
+                  )}
+                  <span>📎 ADJUNTAR PDF A WHATSAPP</span>
+                </button>
+
+                {/* Botón B: Abrir chat directo con el cliente */}
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (telefonoWhatsApp && telefonoWhatsApp.length >= (countryDetails.phoneLength - 1)) {
+                      handleShareWhatsAppPdf(telefonoWhatsApp, false);
+                    } else {
+                      setIsAskingPhone(true);
+                    }
+                  }}
+                  disabled={isGeneratingPdf}
+                  className="w-full h-11 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-300 font-bold text-xs rounded-xl flex items-center justify-center gap-2 cursor-pointer transition-all active:scale-[0.98]"
+                >
+                  <Send className="w-4 h-4 stroke-[2.5]" />
+                  <span>
+                    {telefonoWhatsApp && telefonoWhatsApp.length >= (countryDetails.phoneLength - 1)
+                      ? `💬 ENVIAR DIRECTO AL CHAT`
+                      : `💬 ENVIAR AL NÚMERO`}
+                  </span>
+                </button>
+              </div>
 
               {telefonoWhatsApp && telefonoWhatsApp.length >= (countryDetails.phoneLength - 1) ? (
                 <div className="flex justify-center items-center gap-2">
