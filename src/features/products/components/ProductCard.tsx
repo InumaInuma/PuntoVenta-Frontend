@@ -64,6 +64,11 @@ export const ProductCard: React.FC<ProductCardProps> = ({
   mode = 'sale',
 }) => {
   const [imgError, setImgError] = useState(false);
+
+  // Reiniciar estado de error de imagen si la URL del producto cambia
+  React.useEffect(() => {
+    setImgError(false);
+  }, [producto.imagenUrl]);
   const stockBajo = producto.stockActual <= (producto.stockMinimo || 5);
   const isInCart = inCartQuantity > 0;
   const unitLabel =

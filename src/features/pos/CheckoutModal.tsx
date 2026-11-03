@@ -506,6 +506,8 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
         vuelto: Number(vuelto.toFixed(2)),
         metodoPago: nombreMetodo,
         isFiado: metodoSeleccionado === 'FIADO',
+        idTipoVenta: metodoSeleccionado === 'FIADO' ? 2 : 1,
+        montoFiado: metodoSeleccionado === 'FIADO' ? totalFinal : 0,
         detalles: items.map((it) => ({
           idProducto: it.producto.idProducto,
           cantidad: it.cantidad,
