@@ -346,9 +346,16 @@ export const shareReceiptPdfToWhatsApp = async (
 
   if (isMobile) {
     // EN MÓVILES (Android / iOS):
-    // JAMÁS usar window.open(..., '_blank') tras operaciones asíncronas porque el navegador lo bloquea como popup.
-    // Usar window.location.href: lanza la app de WhatsApp directamente y sin alertas de bloqueo.
-    window.location.href = whatsappUrl;
+    // JAMÁS reemplazar la URL de la propia ventana (window.location.href) porque desmonta la SPA PWA
+    // dejando la pantalla en blanco al regresar.
+    // Usar un enlace temporal con target="_blank" o intent sin alterar la navegación de la app.
+    const a = document.createElement('a');
+    a.href = whatsappUrl;
+    a.target = '_blank';
+    a.rel = 'noopener noreferrer';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
     return { shared: true, method: 'whatsapp_direct' };
   } else {
     // EN COMPUTADORAS / ESCRITORIO:
